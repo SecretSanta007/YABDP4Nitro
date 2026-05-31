@@ -2,7 +2,7 @@
  * @name YABDP4Nitro
  * @author Riolubruh
  * @authorLink https://github.com/riolubruh
- * @version 6.9.1
+ * @version 6.9.2
  * @invite HfFxUbgsBc
  * @source https://github.com/riolubruh/YABDP4Nitro
  * @donate https://github.com/riolubruh/YABDP4Nitro?tab=readme-ov-file#donate
@@ -87,7 +87,6 @@ const [
     stickerSendabilityModule,
     ClipsEnabledMod,
     MaxFileSizeMod,
-    CustomThemesEditor,
     UserSettingsModal,
     CustomUserThemeState,
     CustomUserPanelState,
@@ -145,9 +144,6 @@ const [
     {filter: Webpack.Filters.bySource("getUserMaxFileSize", "reType"), map: { //MaxFileSizeMod
         getMaxFileSize: x=>x.toString().includes('getUserMaxFileSize'),
         exceedsMessageSizeLimit: x=>x.toString().includes('Array.from(', '.size>')
-    }},
-    {filter: Webpack.Filters.bySource('onSaveTheme', 'CUSTOM_THEMES_EDITOR', 'CUSTOM_THEME_COACHMARK'), map: { //CustomThemesEditor
-        render: x=>x
     }},
     {filter: Webpack.Filters.byKeys('openUserSettings')}, //UserSettingsModal
     {filter: Webpack.Filters.bySource('setColors', 'setChassisMixAmount', 'setGradientAngle', 'setAll', 'colors:[],'), map: { //CustomUserThemeState
@@ -274,17 +270,18 @@ const config = {
             "discord_id": "359063827091816448",
             "github_username": "riolubruh"
         }],
-        "version": "6.9.1",
+        "version": "6.9.2",
         "description": "Unlock all screensharing modes, use cross-server & GIF emotes, and more!",
         "github": "https://github.com/riolubruh/YABDP4Nitro",
         "github_raw": "https://raw.githubusercontent.com/riolubruh/YABDP4Nitro/main/YABDP4Nitro.plugin.js"
     },
     changelog: [
         {
-            title: "6.9.1",
+            title: "6.9.2",
             items: [
-                "Added support for cover images in Audio Clips. Now when sending an audio clip with an embedded cover image, it will use that for the video.",
-                "Fixed ffmpeg not changing the inputted file if the input file is named \"output.mp4\"."
+                "Fixed uploading split zip files with ZipClip not working correctly.",
+                "Made it so Clips Bypasses will run when doing an Insta-Upload (holding shift while dragging a file onto the window).",
+                "Fixed Custom Gradient Themes Editor UI not working because it is lazy-loaded."
             ]
         }
     ],
@@ -2581,16 +2578,10 @@ module.exports = class YABDP4Nitro {
             return await ffmpegTransmux(arrayBuffer, inFileName, ffmpegArgs, outFileName);
         }
 
-        const skippedAudioTypes = ['audio/mid','audio/basic','audio/mpegurl','audio/3gp'];
-        const skippedVideoTypes = ['video/3gp',"video/asf",'video/ivf'];
-
-        Patcher.instead(addFilesMod, "addFiles", async (_, [args], originalFunction) => {
-            /* If ffmpeg isn't loaded, or was unloaded for some reason,
-               when the user adds a file, make sure to load it again if it's undefined
-               If we don't do this check, then the user would have to
-               trigger saveAndUpdate or restart the plugin to
-               make ffmpeg load if it wasn't loaded properly the first time. */
-            if(ffmpeg == undefined) await this.loadFFmpeg();
+        async function doClipsBypass(args){
+            //unsupported file types
+            const skippedAudioTypes = ['audio/mid','audio/basic','audio/mpegurl','audio/3gp'];
+            const skippedVideoTypes = ['video/3gp',"video/asf",'video/ivf'];
 
             //load append data only on first added file
             if(!udta || !udtaBuffer){
@@ -2750,8 +2741,7 @@ module.exports = class YABDP4Nitro {
                         let zipFile;
                         let fileArrayBuffer = await currentFile.file.arrayBuffer();
 
-                        //if the file has an archive mime type or is a .001 through .999 part file. technically also would work with more than 999 parts but i dont think it goes that high lol
-                        if(archiveMimeTypes.includes(currentFile.file.type.replace('application/','')) || parseInt(currentFile.file.name.substring(currentFile.file.name.lastIndexOf('.') + 1, currentFile.file.name.length)) > 0) {
+                        if(archiveMimeTypes.includes(currentFile.file.type.replace('application/',''))) {
 
                             zipFile = fileArrayBuffer;
                             clipData.name = currentFile.file.name;
@@ -2834,8 +2824,14 @@ module.exports = class YABDP4Nitro {
                             }
     
                             zipFile = createZip(currentFile.file.name, fileArrayBuffer).buffer;
-                            
-                            clipData.name += ".zip";
+
+                            let fileExtension = currentFile.file.name.substring(currentFile.file.name.lastIndexOf('.') + 1);
+                            //if the file is a .001-.999 or .z01-.z99 part file. technically also would work with more than 999 parts but i dont think it goes that high lol
+                            if(parseInt(fileExtension) > 0 || fileExtension.match(/z\d+/)){
+                                clipData.name = currentFile.file.name + ".zip";
+                            }else{
+                                clipData.name += ".zip";
+                            }
                         }
     
                         try {
@@ -2852,7 +2848,48 @@ module.exports = class YABDP4Nitro {
                     currentFile.platform = 1;
                 }
             }
+        }
+
+        Patcher.instead(addFilesMod, "addFiles", async (_, [args], originalFunction) => {
+            /* If ffmpeg isn't loaded, or was unloaded for some reason,
+               when the user adds a file, make sure to load it again if it's undefined
+               If we don't do this check, then the user would have to
+               trigger saveAndUpdate or restart the plugin to
+               make ffmpeg load if it wasn't loaded properly the first time. */
+            if(ffmpeg == undefined) await this.loadFFmpeg();
+
+            //moved clips bypass into its own function so it can be used in sendMessage patch
+            await doClipsBypass(args);
             originalFunction(args);
+        });
+
+        Patcher.instead(MessageActions, "sendMessage", async (_, [channelId, msg, __, extraInfo], originalFunction) => {
+            if(extraInfo?.location === "instant_upload"){
+                //load ffmpeg if it isnt
+                if(ffmpeg == undefined) await this.loadFFmpeg();
+
+                if(extraInfo?.attachmentsToUpload?.length > 0){
+                    //convert to the format doClipsBypass function uses (array of files)
+                    let files = [];
+                    for(let i = 0; i < extraInfo.attachmentsToUpload.length; i++){
+                        let attachment = extraInfo.attachmentsToUpload[i];
+                        files.push(attachment.item);
+                    }
+                    let args = {files};
+    
+                    //let it do the work
+                    await doClipsBypass(args);
+    
+                    //apply changes in attachmentsToUpload
+                    for(let i = 0; i < args.files.length; i++){
+                        let attachment = extraInfo.attachmentsToUpload[i];
+                        attachment.item = args.files[i];
+                        attachment.clip = args.files[i].clip;
+                        attachment.filename = args.files[i].file.name;
+                    }
+                }
+            }
+            originalFunction(channelId, msg, __, extraInfo);
         });
 
         Patcher.after(ClipsEnabledMod, "useEnableClips", () => {
@@ -3088,7 +3125,7 @@ module.exports = class YABDP4Nitro {
     }
 
     // #region Client Themes
-    clientThemes(){
+    async clientThemes(){
         try{
             this.applySavedClientTheme();
         }catch(err){
@@ -3213,58 +3250,63 @@ module.exports = class YABDP4Nitro {
             }, 3000);
         });
 
-        Patcher.instead(CustomThemesEditor, "render", (_,[args],ogFunction) => {
-            let ret = ogFunction(args);
-            //dont replace footer if user is premium
-            if(CurrentUser.premiumType == 2) return ret;
-
-            //take the onSaveTheme function from the original footer cause we still need it
-            const onSaveTheme = ret?.props?.children?.[1]?.props?.onSaveTheme;
-
-            if(onSaveTheme){
-                //replace the original footer with a custom one
-                ret.props.children[1] = React.createElement('div', {
-                    style: {
-                        display: "flex",
-                        gap: "25px",
-                        padding: "16px 30px",
-                        borderTop: "1px solid var(--border-subtle)"
-                    },
-                    children: [
-                        React.createElement(Components.Button, {
-                            children: "Back",
-                            className: "yabd-secondary-button",
+        if(!this.CustomThemesEditor) this.CustomThemesEditor = await Webpack.waitForModule(Webpack.Filters.bySource('onSaveTheme', 'CUSTOM_THEMES_EDITOR', 'CUSTOM_THEME_COACHMARK'), {signal:controller.signal})
+        if(this.CustomThemesEditor){
+            let render = this.findMangledName(this.CustomThemesEditor, x=>x?.toString?.()?.includes?.("onSaveTheme"), "CustomThemesEditor");
+            if(render){
+                Patcher.instead(this.CustomThemesEditor, render, (_,[args],ogFunction) => {
+                    let ret = ogFunction(args);
+                    //dont replace footer if user is premium
+                    if(CurrentUser.premiumType == 2) return ret;
+        
+                    //take the onSaveTheme function from the original footer cause we still need it
+                    const onSaveTheme = ret?.props?.children?.[1]?.props?.onSaveTheme;
+        
+                    if(onSaveTheme){
+                        //replace the original footer with a custom one
+                        ret.props.children[1] = React.createElement('div', {
                             style: {
-                                width: "100%",
+                                display: "flex",
+                                gap: "25px",
+                                padding: "16px 30px",
+                                borderTop: "1px solid var(--border-subtle)"
                             },
-                            onClick: () => {
-                                UserSettingsModal.openUserSettings('appearance_panel');
-                                
-                                //close theme customization panel
-                                CustomUserPanelState.state.setState({
-                                    activePanel: null,
-                                    metadata: null
-                                });
-                            }
-                        }),
-                        React.createElement(Components.Button, {
-                            children: "Apply",
-                            style: {
-                                width: "100%",
-                                fontSize: "16px"
-                            },
-                            onClick: (e) => {
-                                onSaveTheme(e);
-                            }
-                        }),
-                    ]
+                            children: [
+                                React.createElement(Components.Button, {
+                                    children: "Back",
+                                    className: "yabd-secondary-button",
+                                    style: {
+                                        width: "100%",
+                                    },
+                                    onClick: () => {
+                                        UserSettingsModal.openUserSettings('appearance_panel');
+                                        
+                                        //close theme customization panel
+                                        CustomUserPanelState.state.setState({
+                                            activePanel: null,
+                                            metadata: null
+                                        });
+                                    }
+                                }),
+                                React.createElement(Components.Button, {
+                                    children: "Apply",
+                                    style: {
+                                        width: "100%",
+                                        fontSize: "16px"
+                                    },
+                                    onClick: (e) => {
+                                        onSaveTheme(e);
+                                    }
+                                }),
+                            ]
+                        });
+                    }else{
+                        Logger.error('onSaveTheme is not defined.', ret);
+                    }
+                    return ret;
                 });
-            }else{
-                Logger.error('onSaveTheme is not defined.', ret);
             }
-            return ret;
-        });
-
+        }
     } //End of clientThemes()
     // #endregion
 
@@ -4802,6 +4844,7 @@ module.exports = class YABDP4Nitro {
         if(this.usrBgData) this.usrBgData = null;
         if(this.userPfps) this.userPfps = null;
         if(this.settingsUIMod) this.settingsUIMod = null;
+        if(this.CustomThemesEditor) this.CustomThemesEditor = null;
         
         Data.save("settings", settings);
         this.saveDataFile();
