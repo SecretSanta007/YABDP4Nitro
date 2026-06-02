@@ -853,6 +853,8 @@ module.exports = class YABDP4Nitro {
     } //End of saveAndUpdate()
     // #endregion
 
+
+    //TODO: this needs a rewrite to support users without profile pictures.
     async pfpContextMenu(){
         if(UserAvatar?.render){
             if(!this.UserContextMenuFunctions) this.UserContextMenuFunctions = await Webpack.waitForModule(Webpack.Filters.bySource('isGroupDM', 'targetIsUser'), {signal: controller.signal});
@@ -868,16 +870,19 @@ module.exports = class YABDP4Nitro {
                 if(ret?.props && args?.src) {
                     ret.props.onContextMenu = (e) => {
                         let userId = args.src.replace("https://cdn.discordapp.com/avatars/",'').split('/')[0];
-                        let user = UserStore.getUser(userId);
-
-                        //get channel id of first selectable channel in first guild
-                        let channel = Object.values(GuildChannelStore.getAllGuilds()).filter(o => o?.SELECTABLE?.[0]?.channel)?.[0]?.SELECTABLE?.[0]?.channel;
-
-                        //if we cant find one, look for last selected channel
-                        // unless there is no last selected channel id, in which case get the first available DM channel
-                        if(!channel) channel = SelectedChannelStore.getLastSelectedChannelId() ? ChannelStore.getChannel(SelectedChannelStore.getLastSelectedChannelId()) : ChannelStore.getSortedPrivateChannels()?.[0];
-
-                        if(channel) openUserContextMenu(e,user,channel);
+                        if(userId){
+                            let user = UserStore.getUser(userId);
+                            if(user){
+                                //get channel id of first selectable channel in first guild
+                                let channel = Object.values(GuildChannelStore.getAllGuilds()).filter(o => o?.SELECTABLE?.[0]?.channel)?.[0]?.SELECTABLE?.[0]?.channel;
+        
+                                //if we cant find one, look for last selected channel
+                                // unless there is no last selected channel id, in which case get the first available DM channel
+                                if(!channel) channel = SelectedChannelStore.getLastSelectedChannelId() ? ChannelStore.getChannel(SelectedChannelStore.getLastSelectedChannelId()) : ChannelStore.getSortedPrivateChannels()?.[0];
+        
+                                if(channel) openUserContextMenu(e,user,channel);
+                            }
+                        }
                     }
                 }
             });
