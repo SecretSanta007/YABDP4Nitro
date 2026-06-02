@@ -2,7 +2,7 @@
  * @name YABDP4Nitro
  * @author Riolubruh
  * @authorLink https://github.com/riolubruh
- * @version 6.9.2
+ * @version 6.9.3
  * @invite HfFxUbgsBc
  * @source https://github.com/riolubruh/YABDP4Nitro
  * @donate https://github.com/riolubruh/YABDP4Nitro?tab=readme-ov-file#donate
@@ -90,7 +90,6 @@ const [
     UserSettingsModal,
     CustomUserThemeState,
     CustomUserPanelState,
-    UserContextMenuFunctions,
     UserAvatar,
     StreamButtons
 ] = Webpack.getBulk(
@@ -151,9 +150,6 @@ const [
     }},
     {filter: Webpack.Filters.bySource('CLIENT_THEMES_EDITOR', 'activePanel', 'SHARE_MESSAGE'), map:{
         state: x=>x?.setState
-    }},
-    {filter: Webpack.Filters.bySource('isGroupDM', 'targetIsUser'), map: {
-        openUserContextMenu: x=>x?.toString?.().includes?.("targetIsUser", "showMute")
     }},
     {filter: Webpack.Filters.bySource('avatarDecoration', 'foreignObject', 'onClick', 'statusColor', 'isMobile', 'isVR'), map:{
         render: x=>x?.toString?.().includes?.('foreignObject')
@@ -270,18 +266,18 @@ const config = {
             "discord_id": "359063827091816448",
             "github_username": "riolubruh"
         }],
-        "version": "6.9.2",
+        "version": "6.9.3",
         "description": "Unlock all screensharing modes, use cross-server & GIF emotes, and more!",
         "github": "https://github.com/riolubruh/YABDP4Nitro",
         "github_raw": "https://raw.githubusercontent.com/riolubruh/YABDP4Nitro/main/YABDP4Nitro.plugin.js"
     },
     changelog: [
         {
-            title: "6.9.2",
+            title: "6.9.3",
             items: [
-                "Fixed uploading split zip files with ZipClip not working correctly.",
-                "Made it so Clips Bypasses will run when doing an Insta-Upload (holding shift while dragging a file onto the window).",
-                "Fixed Custom Gradient Themes Editor UI not working because it is lazy-loaded."
+                "Moved Clips insta-upload code into _sendMessage patch instead of patching sendMessage. Should hopefully improve compatibility with other plugins.",
+                "Fixed UserAvatar custom context menu (where you can open the user context menu in situations where vanilla does not allow it, like in the blocked user list) not working due to lazy-loading.",
+                "Made it so the UserAvatar custom context menu now only works when Extra Context Menus is enabled."
             ]
         }
     ],
@@ -431,7 +427,7 @@ const config = {
                 { type: "switch", id: "removeScreenshareUpsell", name: "Remove Screen Share Nitro Upsell", note: "Removes the Nitro upsell in the Screen Share quality option menu.", value: () => settings.removeScreenshareUpsell },
                 { type: "switch", id: "unlockAppIcons", name: "App Icons", note: "Unlocks app icons.", value: () => settings.unlockAppIcons },
                 { type: "switch", id: "removeNotStaffWarning", name: "Remove Not Staff Warning", note: "Removes the \"NOT STAFF\" warning on DMs when Experiments are enabled.", value: () => settings.removeNotStaffWarning },
-                { type: "switch", id: "extraContextMenus", name: "Extra Context Menus and Options", note: "Adds a Copy URL and Open URL buttons to the context menu that appears when you right-click an Emoji or Sticker in the Expression Picker and adds a context menu that will appear with Copy Link and Open Link options when you right-click a GIF in the GIF picker.", value: () => settings.extraContextMenus},
+                { type: "switch", id: "extraContextMenus", name: "Extra Context Menus and Options", note: "Adds a Copy URL and Open URL buttons to the context menu that appears when you right-click an Emoji or Sticker in the Expression Picker, a context menu that will appear with Copy Link and Open Link options when you right-click a GIF in the GIF picker, and a context menu that will appear when right-clicking on user avatars where a context menu wouldn't normally open (ex: blocked/ignored list).", value: () => settings.extraContextMenus},
                 { type: "switch", id: "experiments", name: "Experiments", note: "Unlocks experiments. Soundmoji and Enable Clips Experiments have to be disabled to turn this off. Use at your own risk.", value: () => (settings.experiments || settings.soundmojiEnabled || (settings.useClipBypass && settings.enableClipsExperiment))},
                 { type: "switch", id: "checkForUpdates", name: "Check for Updates", note: "Should the plugin check for updates on startup?", value: () => settings.checkForUpdates }
             ]
@@ -749,7 +745,7 @@ module.exports = class YABDP4Nitro {
             }
         }
 
-        if(settings.soundmojiEnabled || (settings.emojiBypass && settings.emojiBypassType == 0) || settings.stickerBypass){
+        if(settings.soundmojiEnabled || (settings.emojiBypass && settings.emojiBypassType == 0) || settings.stickerBypass || settings.zipClip || settings.useClipBypass || settings.useAudioClipBypass){
             try{
                 this._sendMessageInsteadPatch();
             }catch(err){
@@ -803,7 +799,16 @@ module.exports = class YABDP4Nitro {
         }
 
         if(settings.extraContextMenus){
-            this.extraContextMenus();
+            try{
+                this.extraContextMenus();
+            }catch(err){
+                Logger.error(err);
+            }
+            try{
+                this.pfpContextMenu();
+            }catch(err){
+                Logger.error(err);
+            }
         }
 
         if(settings.sharpenStreams){
@@ -824,26 +829,6 @@ module.exports = class YABDP4Nitro {
             }catch(err){
                 Logger.error(err);
             }
-        }
-
-        if(UserAvatar?.render){
-            Patcher.after(UserAvatar, "render", (_, [args], ret) => {
-                if(ret?.props && args?.src) {
-                    ret.props.onContextMenu = (e) => {
-                        let userId = args.src.replace("https://cdn.discordapp.com/avatars/",'').split('/')[0];
-                        let user = UserStore.getUser(userId);
-
-                        //get channel id of first selectable channel in first guild
-                        let channel = Object.values(GuildChannelStore.getAllGuilds()).filter(o=>o?.SELECTABLE?.[0]?.channel)?.[0]?.SELECTABLE?.[0]?.channel;
-
-                        //if we cant find one, look for last selected channel
-                        // unless there is no last selected channel id, in which case get the first available DM channel
-                        if(!channel) channel = SelectedChannelStore.getLastSelectedChannelId() ? ChannelStore.getChannel(SelectedChannelStore.getLastSelectedChannelId()) : ChannelStore.getSortedPrivateChannels()?.[0];
-
-                        if(channel) UserContextMenuFunctions.openUserContextMenu(e,user,channel)
-                    }
-                }
-            });
         }
 
         try{
@@ -867,6 +852,39 @@ module.exports = class YABDP4Nitro {
         } */
     } //End of saveAndUpdate()
     // #endregion
+
+    async pfpContextMenu(){
+        if(UserAvatar?.render){
+            if(!this.UserContextMenuFunctions) this.UserContextMenuFunctions = await Webpack.waitForModule(Webpack.Filters.bySource('isGroupDM', 'targetIsUser'), {signal: controller.signal});
+
+            let openUserContextMenu;
+            if(this.UserContextMenuFunctions){
+                openUserContextMenu = Object.values(this.UserContextMenuFunctions).find(x=>x?.toString?.().includes?.("targetIsUser", "showMute"));
+            }else{
+                Logger.warn("UserContextMenuFunctions is undefined");
+                return;
+            }
+            Patcher.after(UserAvatar,"render",(_,[args],ret) => {
+                if(ret?.props && args?.src) {
+                    ret.props.onContextMenu = (e) => {
+                        let userId = args.src.replace("https://cdn.discordapp.com/avatars/",'').split('/')[0];
+                        let user = UserStore.getUser(userId);
+
+                        //get channel id of first selectable channel in first guild
+                        let channel = Object.values(GuildChannelStore.getAllGuilds()).filter(o => o?.SELECTABLE?.[0]?.channel)?.[0]?.SELECTABLE?.[0]?.channel;
+
+                        //if we cant find one, look for last selected channel
+                        // unless there is no last selected channel id, in which case get the first available DM channel
+                        if(!channel) channel = SelectedChannelStore.getLastSelectedChannelId() ? ChannelStore.getChannel(SelectedChannelStore.getLastSelectedChannelId()) : ChannelStore.getSortedPrivateChannels()?.[0];
+
+                        if(channel) openUserContextMenu(e,user,channel);
+                    }
+                }
+            });
+        }else{
+            Logger.error("UserAvatar.render is undefined");
+        }
+    }
 
     //#region Settings UI
     async settingsUI(){
@@ -2539,46 +2557,76 @@ module.exports = class YABDP4Nitro {
 
         if(ffmpeg == undefined) await this.loadFFmpeg();
 
-        async function ffmpegTransmux(arrayBuffer, inFileName = "input.mp4", ffmpegArguments, outFileName = "output.mp4"){
-            if(ffmpeg){
-                if(inFileName == outFileName){
-                    inFileName = "in_" + inFileName;
-                }
-                if(!ffmpegArguments)
-                    ffmpegArguments = ["-i",inFileName,"-c:v","copy","-c:a","copy","-c:s","mov_text","-dn","-brand","isom/avc1",
-                        "-movflags","+faststart","-map","0","-map_metadata","-1","-map_chapters","-1","-map","-0:t","-strict","-2",outFileName
-                    ];
-                if(arrayBuffer && inFileName){
-                    await ffmpeg.writeFile(inFileName, new Uint8Array(arrayBuffer));
-                }
-                console.log("Approximately equivalent ffmpeg command:");
-                console.log("ffmpeg " + ffmpegArguments.join(" "));
-                await ffmpeg.exec(ffmpegArguments);
-                const data = await ffmpeg.readFile(outFileName);
-                
-                if(inFileName) ffmpeg.deleteFile(inFileName);
-                if(outFileName) ffmpeg.deleteFile(outFileName);
-                
-                if(data.length == 0){
-                    throw new Error("An error occurred during muxing/encoding: Output file ended up empty or doesn't exist, " + 
-                                    "likely due to an FFmpeg error. Please check the FFmpeg logs above. " +
-                                    "If you need assistance, please use the support channel in the Discord server.");
-                }
+        Patcher.instead(addFilesMod, "addFiles", async (_, [args], originalFunction) => {
+            /* If ffmpeg isn't loaded, or was unloaded for some reason,
+               when the user adds a file, make sure to load it again if it's undefined
+               If we don't do this check, then the user would have to
+               trigger saveAndUpdate or restart the plugin to
+               make ffmpeg load if it wasn't loaded properly the first time. */
+            if(ffmpeg == undefined) await this.loadFFmpeg();
 
-                return data.buffer;
+            //moved clips bypass into its own function so it can be used in sendMessage patch
+            await this.doClipsBypass(args);
+            originalFunction(args);
+        });
+
+        Patcher.after(ClipsEnabledMod, "useEnableClips", () => {
+            return true;
+        });
+        Patcher.instead(ClipsEnabledMod, "areClipsEnabled", () => {
+            return true;
+        });
+        Patcher.instead(ClipsStore, "isViewerClippingAllowedForUser", () => {
+            return true;
+        });
+        Patcher.instead(ClipsStore, "isClipsEnabledForUser", () => {
+            return true;
+        });
+        Patcher.instead(ClipsStore, "isVoiceRecordingAllowedForUser", () => {
+            return true;
+        });
+    } //End of clipsBypass()
+
+    async ffmpegTransmux(arrayBuffer,inFileName = "input.mp4",ffmpegArguments,outFileName = "output.mp4") {
+        if(ffmpeg) {
+            if(inFileName == outFileName) {
+                inFileName = "in_" + inFileName;
             }
-            else throw new Error(`Can't mux/encode: ffmpeg is not loaded!`);
-        }
-        async function ffmpegAudioTransmux(arrayBuffer, inFileName = "input.mp3", outFileName = "output.mp4"){
-            let ffmpegArgs = ["-i",inFileName,"-f","lavfi","-i","color=c=black:s=300x100","-shortest","-fflags","+shortest", 
-                "-map","0:v?","-map","1:v","-map","0:a","-disposition:v","default","-brand","isom/avc1","-movflags","+faststart",
-                "-map_metadata","-1","-dn","-map_chapters","-1","-preset","ultrafast","-c:v","libx264","-c:a","copy","-strict","-2",
-                "-tune","stillimage","-r","1","-pix_fmt","yuv420p","-vf","crop=trunc(iw/2)*2:trunc(ih/2)*2",outFileName];
+            if(!ffmpegArguments)
+                ffmpegArguments = ["-i",inFileName,"-c:v","copy","-c:a","copy","-c:s","mov_text","-dn","-brand","isom/avc1",
+                    "-movflags","+faststart","-map","0","-map_metadata","-1","-map_chapters","-1","-map","-0:t","-strict","-2",outFileName
+                ];
+            if(arrayBuffer && inFileName) {
+                await ffmpeg.writeFile(inFileName,new Uint8Array(arrayBuffer));
+            }
+            console.log("Approximately equivalent ffmpeg command:");
+            console.log("ffmpeg " + ffmpegArguments.join(" "));
+            await ffmpeg.exec(ffmpegArguments);
+            const data = await ffmpeg.readFile(outFileName);
 
-            return await ffmpegTransmux(arrayBuffer, inFileName, ffmpegArgs, outFileName);
-        }
+            if(inFileName) ffmpeg.deleteFile(inFileName);
+            if(outFileName) ffmpeg.deleteFile(outFileName);
 
-        async function doClipsBypass(args){
+            if(data.length == 0) {
+                throw new Error("An error occurred during muxing/encoding: Output file ended up empty or doesn't exist, " +
+                    "likely due to an FFmpeg error. Please check the FFmpeg logs above. " +
+                    "If you need assistance, please use the support channel in the Discord server.");
+            }
+
+            return data.buffer;
+        }
+        else throw new Error(`Can't mux/encode: ffmpeg is not loaded!`);
+    }
+    async ffmpegAudioTransmux(arrayBuffer,inFileName = "input.mp3",outFileName = "output.mp4") {
+        let ffmpegArgs = ["-i",inFileName,"-f","lavfi","-i","color=c=black:s=300x100","-shortest","-fflags","+shortest",
+            "-map","0:v?","-map","1:v","-map","0:a","-disposition:v","default","-brand","isom/avc1","-movflags","+faststart",
+            "-map_metadata","-1","-dn","-map_chapters","-1","-preset","ultrafast","-c:v","libx264","-c:a","copy","-strict","-2",
+            "-tune","stillimage","-r","1","-pix_fmt","yuv420p","-vf","crop=trunc(iw/2)*2:trunc(ih/2)*2",outFileName];
+
+        return await this.ffmpegTransmux(arrayBuffer,inFileName,ffmpegArgs,outFileName);
+    }
+
+    async doClipsBypass(args){
             //unsupported file types
             const skippedAudioTypes = ['audio/mid','audio/basic','audio/mpegurl','audio/3gp'];
             const skippedVideoTypes = ['video/3gp',"video/asf",'video/ivf'];
@@ -2664,7 +2712,7 @@ module.exports = class YABDP4Nitro {
                                 outFileName = "output.mov";
                             }
 
-                            let array1 = concatArrayBuffers(await ffmpegTransmux(arrayBuffer, currentFile.file.name, undefined, outFileName), udtaBuffer);
+                            let array1 = concatArrayBuffers(await this.ffmpegTransmux(arrayBuffer, currentFile.file.name, undefined, outFileName), udtaBuffer);
 
                             let video = new File([new Uint8Array(array1)], currentFile.file.name.substr(0, currentFile.file.name.lastIndexOf(".")) + ".mp4", { type: "video/mp4" });
 
@@ -2697,7 +2745,7 @@ module.exports = class YABDP4Nitro {
                             UI.showToast("AC3 will send but playback is only supported on mobile!", {type: "warn"});
                         }
 
-                        let array1 = concatArrayBuffers(await ffmpegAudioTransmux(arrayBuffer, currentFile.file.name, outFileName), udtaBuffer);
+                        let array1 = concatArrayBuffers(await this.ffmpegAudioTransmux(arrayBuffer, currentFile.file.name, outFileName), udtaBuffer);
 
                         let video = new File([new Uint8Array(array1)], clipData.name + ".mp4", { type: "video/mp4" });
 
@@ -2731,7 +2779,7 @@ module.exports = class YABDP4Nitro {
                             "-brand","isom/avc1","-movflags","+faststart","-map_metadata","-1",
                             "-preset","ultrafast","-vframes","5","-c:v","mjpeg","output.mp4"];
 
-                        clipMaBuffer = await ffmpegTransmux(undefined,"",ffmpegArgs,"output.mp4");
+                        clipMaBuffer = await this.ffmpegTransmux(undefined,"",ffmpegArgs,"output.mp4");
                         clipMaBuffer = concatArrayBuffers(clipMaBuffer, udtaBuffer);
                     }
 
@@ -2849,65 +2897,6 @@ module.exports = class YABDP4Nitro {
                 }
             }
         }
-
-        Patcher.instead(addFilesMod, "addFiles", async (_, [args], originalFunction) => {
-            /* If ffmpeg isn't loaded, or was unloaded for some reason,
-               when the user adds a file, make sure to load it again if it's undefined
-               If we don't do this check, then the user would have to
-               trigger saveAndUpdate or restart the plugin to
-               make ffmpeg load if it wasn't loaded properly the first time. */
-            if(ffmpeg == undefined) await this.loadFFmpeg();
-
-            //moved clips bypass into its own function so it can be used in sendMessage patch
-            await doClipsBypass(args);
-            originalFunction(args);
-        });
-
-        Patcher.instead(MessageActions, "sendMessage", async (_, [channelId, msg, __, extraInfo], originalFunction) => {
-            if(extraInfo?.location === "instant_upload"){
-                //load ffmpeg if it isnt
-                if(ffmpeg == undefined) await this.loadFFmpeg();
-
-                if(extraInfo?.attachmentsToUpload?.length > 0){
-                    //convert to the format doClipsBypass function uses (array of files)
-                    let files = [];
-                    for(let i = 0; i < extraInfo.attachmentsToUpload.length; i++){
-                        let attachment = extraInfo.attachmentsToUpload[i];
-                        files.push(attachment.item);
-                    }
-                    let args = {files};
-    
-                    //let it do the work
-                    await doClipsBypass(args);
-    
-                    //apply changes in attachmentsToUpload
-                    for(let i = 0; i < args.files.length; i++){
-                        let attachment = extraInfo.attachmentsToUpload[i];
-                        attachment.item = args.files[i];
-                        attachment.clip = args.files[i].clip;
-                        attachment.filename = args.files[i].file.name;
-                    }
-                }
-            }
-            originalFunction(channelId, msg, __, extraInfo);
-        });
-
-        Patcher.after(ClipsEnabledMod, "useEnableClips", () => {
-            return true;
-        });
-        Patcher.instead(ClipsEnabledMod, "areClipsEnabled", () => {
-            return true;
-        });
-        Patcher.instead(ClipsStore, "isViewerClippingAllowedForUser", () => {
-            return true;
-        });
-        Patcher.instead(ClipsStore, "isClipsEnabledForUser", () => {
-            return true;
-        });
-        Patcher.instead(ClipsStore, "isVoiceRecordingAllowedForUser", () => {
-            return true;
-        });
-    } //End of clipsBypass()
     // #endregion
 
     // #region Load FFmpeg.js
@@ -3939,6 +3928,35 @@ module.exports = class YABDP4Nitro {
             }
             //#endregion
 
+            //#region Clips Instant Upload Patch
+            let extraInfo = msg?.[2];
+            if(extraInfo?.location === "instant_upload" && (settings.zipClip || settings.useClipBypass || settings.useAudioClipBypass)){
+                //load ffmpeg if it isnt
+                if(ffmpeg == undefined) await this.loadFFmpeg();
+
+                if(extraInfo?.attachmentsToUpload?.length > 0){
+                    //convert to the format doClipsBypass function uses (array of files)
+                    let files = [];
+                    for(let i = 0; i < extraInfo.attachmentsToUpload.length; i++){
+                        let attachment = extraInfo.attachmentsToUpload[i];
+                        files.push(attachment.item);
+                    }
+                    let args = {files};
+    
+                    //let it do the work
+                    await this.doClipsBypass(args);
+    
+                    //apply changes in attachmentsToUpload
+                    for(let i = 0; i < args.files.length; i++){
+                        let attachment = extraInfo.attachmentsToUpload[i];
+                        attachment.item = args.files[i];
+                        attachment.clip = args.files[i].clip;
+                        attachment.filename = args.files[i].file.name;
+                    }
+                }
+            }
+            //#endregion
+
             if(emojis.length == 0 && sounds.length == 0){
                 send.apply(_, msg);
             }
@@ -4845,6 +4863,7 @@ module.exports = class YABDP4Nitro {
         if(this.userPfps) this.userPfps = null;
         if(this.settingsUIMod) this.settingsUIMod = null;
         if(this.CustomThemesEditor) this.CustomThemesEditor = null;
+        if(this.UserContextMenuFunctions) this.UserContextMenuFunctions = null;
         
         Data.save("settings", settings);
         this.saveDataFile();
