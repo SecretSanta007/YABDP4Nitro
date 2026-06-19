@@ -2,7 +2,7 @@
  * @name YABDP4Nitro
  * @author Riolubruh
  * @authorLink https://github.com/riolubruh
- * @version 6.9.3
+ * @version 6.9.4
  * @invite HfFxUbgsBc
  * @source https://github.com/riolubruh/YABDP4Nitro
  * @donate https://github.com/riolubruh/YABDP4Nitro?tab=readme-ov-file#donate
@@ -90,7 +90,7 @@ const [
     UserSettingsModal,
     CustomUserThemeState,
     CustomUserPanelState,
-    UserAvatar,
+    SimpleUserAvatar,
     StreamButtons
 ] = Webpack.getBulk(
     {filter: Webpack.Filters.bySource('pendingBanner', 'displayProfile', 'foreignObject'), map: {
@@ -151,9 +151,7 @@ const [
     {filter: Webpack.Filters.bySource('CLIENT_THEMES_EDITOR', 'activePanel', 'SHARE_MESSAGE'), map:{
         state: x=>x?.setState
     }},
-    {filter: Webpack.Filters.bySource('avatarDecoration', 'foreignObject', 'onClick', 'statusColor', 'isMobile', 'isVR'), map:{
-        render: x=>x?.toString?.().includes?.('foreignObject')
-    }},
+    {filter: Webpack.Filters.combine(Webpack.Filters.bySource("getAvatarURL", ".SIZE_32,animate:"), (x=>x.type), Webpack.Filters.not(Webpack.Filters.bySource("guildId")))}, //SimpleUserAvatar
     {filter: Webpack.Filters.bySource("Unknown frame rate:"), map:{
         ApplicationStreamFPS: o=>o?.FPS_30,
         ApplicationStreamFPSButtonsWithSuffixLabel: o => Array.isArray(o) && typeof o[0]?.label === 'string' && o[0]?.value === 15,
@@ -266,18 +264,17 @@ const config = {
             "discord_id": "359063827091816448",
             "github_username": "riolubruh"
         }],
-        "version": "6.9.3",
+        "version": "6.9.4",
         "description": "Unlock all screensharing modes, use cross-server & GIF emotes, and more!",
         "github": "https://github.com/riolubruh/YABDP4Nitro",
         "github_raw": "https://raw.githubusercontent.com/riolubruh/YABDP4Nitro/main/YABDP4Nitro.plugin.js"
     },
     changelog: [
         {
-            title: "6.9.3",
+            title: "6.9.4",
             items: [
-                "Moved Clips insta-upload code into _sendMessage patch instead of patching sendMessage. Should hopefully improve compatibility with other plugins.",
-                "Fixed UserAvatar custom context menu (where you can open the user context menu in situations where vanilla does not allow it, like in the blocked user list) not working due to lazy-loading.",
-                "Made it so the UserAvatar custom context menu now only works when Extra Context Menus is enabled."
+                "Rewrote block/ignored list user context menu to work with users that do not have a PFP.",
+                "Fixed default sounds not working with Soundmoji Bypass."
             ]
         }
     ],
@@ -854,9 +851,8 @@ module.exports = class YABDP4Nitro {
     // #endregion
 
 
-    //TODO: this needs a rewrite to support users without profile pictures.
     async pfpContextMenu(){
-        if(UserAvatar?.render){
+        if(SimpleUserAvatar?.type){
             if(!this.UserContextMenuFunctions) this.UserContextMenuFunctions = await Webpack.waitForModule(Webpack.Filters.bySource('isGroupDM', 'targetIsUser'), {signal: controller.signal});
 
             let openUserContextMenu;
@@ -866,33 +862,29 @@ module.exports = class YABDP4Nitro {
                 Logger.warn("UserContextMenuFunctions is undefined");
                 return;
             }
-            Patcher.after(UserAvatar,"render",(_,[args],ret) => {
-                if(ret?.props && args?.src) {
+
+            Patcher.after(SimpleUserAvatar, "type", (_,[{user, size}],ret) => {
+                if(ret?.props){
                     ret.props.onContextMenu = (e) => {
-                        let userId = args.src.replace("https://cdn.discordapp.com/avatars/",'').split('/')[0];
-                        if(userId){
-                            let user = UserStore.getUser(userId);
-                            if(user){
-                                //get channel id of first selectable channel in first guild
-                                let channel = Object.values(GuildChannelStore.getAllGuilds()).filter(o => o?.SELECTABLE?.[0]?.channel)?.[0]?.SELECTABLE?.[0]?.channel;
-        
-                                //if we cant find one, look for last selected channel
-                                // unless there is no last selected channel id, in which case get the first available DM channel
-                                if(!channel) channel = SelectedChannelStore.getLastSelectedChannelId() ? ChannelStore.getChannel(SelectedChannelStore.getLastSelectedChannelId()) : ChannelStore.getSortedPrivateChannels()?.[0];
-        
-                                if(channel) openUserContextMenu(e,user,channel);
-                            }
+                        if(user) {
+                            //get channel id of first selectable channel in first guild
+                            let channel = Object.values(GuildChannelStore.getAllGuilds()).filter(o => o?.SELECTABLE?.[0]?.channel)?.[0]?.SELECTABLE?.[0]?.channel;
+    
+                            //if we cant find one, look for last selected channel
+                            // unless there is no last selected channel id, in which case get the first available DM channel
+                            if(!channel) channel = SelectedChannelStore.getLastSelectedChannelId() ? ChannelStore.getChannel(SelectedChannelStore.getLastSelectedChannelId()) : ChannelStore.getSortedPrivateChannels()?.[0];
+    
+                            if(channel) openUserContextMenu(e,user,channel);
                         }
                     }
                 }
             });
-        }else{
-            Logger.error("UserAvatar.render is undefined");
         }
     }
 
     //#region Settings UI
     async settingsUI(){
+        // this.overrideVariant('2026-03-wysiwyg-user-profile-editing', -1);
         if(!this.settingsUIMod) this.settingsUIMod = await Webpack.waitForModule(Webpack.Filters.bySource("userNameplate","guildNameplate","pendingNameplate", "titleIcon"), {raw:true, signal: controller.signal});
         if(!this.settingsUIMod){
             Logger.warn("Settings UI module was undefined.");
@@ -3864,14 +3856,14 @@ module.exports = class YABDP4Nitro {
             
             //#region Soundmoji
             const channelId = msg[0];
-            let regex = /<sound:[0-9]\d+:[0-9]\d+>/g;
+            let regex = /<sound:\d+:\d+>/;
             let ids = [];
             let sounds = [];
             if(settings.soundmojiEnabled){
                 let soundmojis = msg[1].content.match(regex);
                 if(soundmojis) {
                     for(let i = 0; i < soundmojis.length; i++) {
-                        let id = soundmojis[i].slice(-20, -1);
+                        let id = soundmojis[i].split(':')[2].slice(0,-1);
                         let sound = SoundboardStore.getSoundById(id);
                         if(sound) {
                             sounds.push(sound);
