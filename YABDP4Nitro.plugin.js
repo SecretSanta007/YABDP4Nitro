@@ -2,7 +2,7 @@
  * @name YABDP4Nitro
  * @author Riolubruh
  * @authorLink https://github.com/riolubruh
- * @version 6.9.5
+ * @version 6.10.0
  * @invite HfFxUbgsBc
  * @source https://github.com/riolubruh/YABDP4Nitro
  * @donate https://github.com/riolubruh/YABDP4Nitro?tab=readme-ov-file#donate
@@ -39,6 +39,7 @@
 
 //#region Module Hell
 const {Webpack,Patcher,Net,React,UI,Logger,Data,Components,DOM,Plugins,ContextMenu,ReactUtils,Utils} = new BdApi("YABDP4Nitro");
+const {createElement,useState,useRef,useEffect} = React;
 
 const {
     UserStore,
@@ -238,7 +239,8 @@ const defaultSettings = {
         theme: "dark"
     },
     "appIcon": "AppIcon",
-    "voiceTileBannerBackground": false
+    "voiceTileBannerBackground": false,
+    "advancedProfileCustomization": false
 };
 const defaultData = {
     avatarDecorations: {},
@@ -264,16 +266,20 @@ const config = {
             "discord_id": "359063827091816448",
             "github_username": "riolubruh"
         }],
-        "version": "6.9.5",
+        "version": "6.10.0",
         "description": "Unlock all screensharing modes, use cross-server & GIF emotes, and more!",
         "github": "https://github.com/riolubruh/YABDP4Nitro",
         "github_raw": "https://raw.githubusercontent.com/riolubruh/YABDP4Nitro/main/YABDP4Nitro.plugin.js"
     },
     changelog: [
         {
-            title: "6.9.5",
+            title: "6.10.0",
             items: [
-                "Added extremely hacky, ugly support for the \"What You See Is What You Get\" profile editor, aka UserProfileModalV2. This is intended to be a temporary fix until a better one can be developed."
+                "Improved UI for searching nameplates and effects.",
+                "Added Advanced Profile Editing, which adds the ability to manually specify SKU ID for decorations and effects, and SKU ID and Palette for Nameplates, allowing you to use illegal combinations for SKU ID and Palettes, and any decoration or effect even if it is not in the list provided by the plugin. Off by default.",
+                "Nameplates in Change Fake Nameplate menu now only animate on hover, greatly reducing the amount of lag.",
+                "Added profile colors to 3y3 Copying Zone.",
+                "Code improvements."
             ]
         }
     ],
@@ -380,7 +386,8 @@ const config = {
                 { type: "switch", id: "userPfpIntegration", name: "UserPFP Integration", note: "Imports the UserPFP database so that people who have profile pictures in the UserPFP database will appear with their UserPFP profile picture. There's little reason to disable this.", value: () => settings.userPfpIntegration },
                 { type: "switch", id: "disableUserBadge", name: "Disable User Badge", note: "Disables the YABDP4Nitro User Badge which appears on any user that uses Profile Customization. (client side)", value: () => settings.disableUserBadge },
                 { type: "switch", id: "nameplatesEnabled", name: "Fake Nameplates", note: "Uses invisible 3y3 encoding to allow setting fake nameplates by hiding the information in your custom status and/or bio. Please paste the 3y3 in one or both of those areas.", value: () => settings.nameplatesEnabled },
-                { type: "switch", id: "displayNameStyles", name: "Fake Display Name Styles", note: "Uses invisible 3y3 encoding to allow setting fake display name styles by hiding the information in your bio. Please paste the 3y3 information in your bio.", value: () => settings.displayNameStyles }
+                { type: "switch", id: "displayNameStyles", name: "Fake Display Name Styles", note: "Uses invisible 3y3 encoding to allow setting fake display name styles by hiding the information in your bio. Please paste the 3y3 information in your bio.", value: () => settings.displayNameStyles },
+                { type: "switch", id: "advancedProfileCustomization", name: "Advanced Profile Editing", note: "Allows you to use custom SKU IDs when editing Profile Effects, and Decorations, and the ID/Palette combo with Nameplates. Allows you to use effects/decorations/nameplates that are not possible otherwise.", value: () => settings.advancedProfileCustomization },
             ]
         },
         {
@@ -448,9 +455,9 @@ function copyToClipboard(string, successMessage, errorMessage = "Failed to copy 
 }
 
 function ResizeFindingElement({id, onResize}){
-    const ref = React.useRef(null);
+    const ref = useRef(null);
 
-    React.useEffect(() => {
+    useEffect(() => {
         if(ref.current){
             const observer = new ResizeObserver((ResizeObserverEntry) => {
                 if(ResizeObserverEntry?.[0]){
@@ -465,7 +472,7 @@ function ResizeFindingElement({id, onResize}){
         }
     },[]);
 
-    return React.createElement('div', {
+    return createElement('div', {
         id,
         ref,
         style: {
@@ -892,38 +899,33 @@ module.exports = class YABDP4Nitro {
         this.overrideVariant("2026-06-wysiwyg-show-dns-to-non-nitro", 1);
         // console.log(UserProfileModalV2);
         Patcher.instead(this.UserProfileModalV2, this.findMangledName(this.UserProfileModalV2, x=>x), (_,[args],og) => {
-            // console.log("thisref", _);
-            // console.log("args", args);
             let ret = og(args);
-            // console.log("ret", ret);
             const editPanel = ret?.props?.children?.props?.children?.props?.children?.props?.children?.props?.children?.[0]?.props?.children?.props?.children?.[1]?.props?.children?.[0]?.props?.children?.[0];
             if(editPanel){
-                // console.log("editPanel",editPanel)
                 nodePatcher.patch(editPanel, (props,res) => {
-                    // console.log("props",props);
-                    // console.log("res",res);
                     const leftPanelInner = res?.props?.children?.props?.children?.[2]?.props?.children?.[0]?.props?.children;
                     if(leftPanelInner){
-                        // console.log("leftPanelInner", leftPanelInner);
                         // please god let this be a temporary hackfix
-                        leftPanelInner?.props?.children?.push?.(React.createElement("button", {
+                        leftPanelInner?.props?.children?.push?.(createElement("button", {
                             children: "3y3 Copying Zone",
                             className: `yabd-secondary-button`,
                             style: {
                                 height: "30px"
                             },
                             onClick: () => {
-                                UI.showConfirmationModal("3y3 Copying Zone", React.createElement("div", {
+                                UI.showConfirmationModal("3y3 Copying Zone", createElement("div", {
                                     children: [
-                                        React.createElement(this.CustomPFPInput, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
-                                        React.createElement("br"),
-                                        React.createElement(this.CustomBannerInput, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
-                                        React.createElement("br"),
-                                        React.createElement(this.CreateNameplateButton, {self: this}),
-                                        React.createElement("br"),
-                                        React.createElement(this.DecorButton, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
-                                        React.createElement("br"),
-                                        React.createElement(this.EffectsButton, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
+                                        createElement(this.newProfileThemesUI),
+                                        createElement("br"),
+                                        createElement(this.CustomPFPInput, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
+                                        createElement("br"),
+                                        createElement(this.CustomBannerInput, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
+                                        createElement("br"),
+                                        createElement(this.CreateNameplateButton, {self: this}),
+                                        createElement("br"),
+                                        createElement(this.DecorButton, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
+                                        createElement("br"),
+                                        createElement(this.EffectsButton, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
                                     ]
                                 }), {cancelText: ""})
                             }
@@ -1003,16 +1005,83 @@ module.exports = class YABDP4Nitro {
         }
     }
 
+    //#region Accent Colors
+    newProfileThemesUI(){
+        const currentUserProfile = UserProfileStore.getUserProfile(CurrentUser.id);
+        const [primary, setPrimary] = useState(currentUserProfile.themeColors ? `#${currentUserProfile.themeColors[0].toString(16).padStart(6, "0")}` : "#000000");
+        const [accent, setAccent] = useState(currentUserProfile.themeColors ? `#${currentUserProfile.themeColors[1].toString(16).padStart(6, "0")}` : "#000000");
+        let userProfile = UserProfileStore.getUserProfile(CurrentUser.id);
+
+        return createElement("div",{
+            children:[
+                createElement(Components.Text, {
+                    children:"Primary",
+                    style: {
+                        fontSize: "14px",
+                        fontWeight: "var(--font-weight-bold)"
+                    }
+                }),
+                createElement(Components.ColorInput, {
+                    value: primary,
+                    defaultValue: "#000000",
+                    disabled:false,
+                    onChange: (e) => {
+                        setPrimary(e);
+                    }
+                }),
+                createElement('br'),
+                createElement(Components.Text, {
+                    children:"Accent",
+                    style: {
+                        fontSize: "14px",
+                        fontWeight: "var(--font-weight-bold)"
+                    }
+                }),
+                createElement(Components.ColorInput, {
+                    value: accent,
+                    defaultValue: "#000000",
+                    disabled:false,
+                    onChange: (e) => {
+                        setAccent(e);
+                    }
+                }),
+                createElement("button",{
+                    children: "Copy Colors 3y3",
+                    className: `yabd-generic-button`,
+                    style: {
+                        height: "32px",
+                        width: "auto",
+                        marginTop: "10px"
+                    },
+                    onClick: () => {
+                        let message = `[${primary},${accent}]`;
+
+                        const padding = "";
+                        let encoded = Array.from(message)
+                            .map(x => x.codePointAt(0))
+                            .filter(x => x >= 0x20 && x <= 0x7f)
+                            .map(x => String.fromCodePoint(x + 0xe0000))
+                            .join("");
+
+                        let encodedStr = ((padding || "") + " " + encoded);
+
+                        copyToClipboard(encodedStr, "3y3 copied to clipboard!");
+                    }
+                })
+            ]
+        })
+    }
+    //#endregion
 
     // #region Custom PFP UI
     CustomPFPInput({secondsightifyEncodeOnly}) {
-        return React.createElement("div",{
+        return createElement("div",{
             style: {
                 display: "flex",
                 marginTop: "4px",
             },
             children: [
-                React.createElement("input",{
+                createElement("input",{
                     id: "profilePictureUrlInput",
                     style: {
                         maxWidth: "112px",
@@ -1021,7 +1090,7 @@ module.exports = class YABDP4Nitro {
                     placeholder: "PFP Imgur URL"
                 }),
                 //Create and append Copy PFP 3y3 button.
-                React.createElement("button",{
+                createElement("button",{
                     children: "Copy PFP 3y3",
                     className: `yabd-generic-button`,
                     id: "profilePictureButton",
@@ -1129,7 +1198,7 @@ module.exports = class YABDP4Nitro {
             if(ret?.props?.children){
                 ret.props.children = [ret.props.children];
                 ret.props.children.push(
-                    React.createElement(this.CustomPFPInput, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
+                    createElement(this.CustomPFPInput, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
                 ); //end of element push
             }
         }); //end of patch
@@ -1152,14 +1221,17 @@ module.exports = class YABDP4Nitro {
     CreateNameplateButton({self}) {
         const NameplatePreviewName = self.findMangledName(NameplatePreview, x=>x?.type?.toString?.().includes?.("showPlaceholderUser"));
         const secondsightifyEncodeOnly = self.secondsightifyEncodeOnly;
+        
         function NameplateList({NameplatePreviewName}) {
-            let [query,setQuery] = React.useState("");
+            const [query,setQuery] = useState("");
+            const [skuIdBox, setSkuIdBox] = useState("");
+            const [paletteBox, setPaletteBox] = useState("");
 
             let nameplatesList = [];
 
             if(NameplatePreview) {
                 if(!data?.nameplatesV2 || data?.nameplatesV2?.length < 1) {
-                    return React.createElement('h1',{
+                    return createElement('h1',{
                         children: "No nameplates were found!",
                         style: {
                             color: "red",
@@ -1177,56 +1249,97 @@ module.exports = class YABDP4Nitro {
                             if(query != "" && !nameplate.name.toLowerCase().includes(query.toLowerCase())) {
                                 continue;
                             }
-                            nameplatesList.push(React.createElement('div',{
-                                children: React.createElement(NameplatePreview[NameplatePreviewName].type,{
-                                    user: CurrentUser,
-                                    isHighlighted: true,
-                                    nameplate: {
-                                        asset: `nameplates/${nameplate.asset.slice(0,-1)}`,
-                                        palette: nameplate.palette,
-                                        skuId,
-                                        label: nameplate.label ? nameplate.label : ""
-                                    },
-                                    isPurchased: true
-                                }),
-                                style: {
-                                    borderRadius: "10px",
-                                    width: "95%",
-                                    marginLeft: "auto",
-                                    marginRight: "auto",
-                                    height: "42px",
-                                    marginTop: "10px",
-                                    position: "relative",
-                                    top: '5px',
-                                    cursor: "pointer",
-                                },
-                                onClick: () => {
-                                    //make 3y3 string
-                                    let strToEncode = `n{${skuId},${nameplate.palette}}`;
-                                    let encodedStr = secondsightifyEncodeOnly(strToEncode);
 
-                                    copyToClipboard(" " + encodedStr,"3y3 copied to clipboard!")
-                                },
-                                title: nameplate.name
-                            }));
+                            function nameplateCopier({nameplate, skuId}){
+                                const [highlighted, setHighlighted] = useState(false);
+
+                                return createElement('div',{
+                                    children: createElement(NameplatePreview[NameplatePreviewName].type,{
+                                        user: CurrentUser,
+                                        isHighlighted: highlighted,
+                                        nameplate: {
+                                            asset: `nameplates/${nameplate.asset.slice(0,-1)}`,
+                                            palette: nameplate.palette,
+                                            skuId,
+                                            label: nameplate.label ? nameplate.label : ""
+                                        },
+                                        isPurchased: true
+                                    }),
+                                    style: {
+                                        borderRadius: "10px",
+                                        width: "95%",
+                                        marginLeft: "auto",
+                                        marginRight: "auto",
+                                        height: "42px",
+                                        marginTop: "10px",
+                                        position: "relative",
+                                        top: '5px',
+                                        cursor: "pointer",
+                                    },
+                                    onClick: () => {
+                                        //make 3y3 string
+                                        let strToEncode = `n{${skuId},${nameplate.palette}}`;
+                                        let encodedStr = secondsightifyEncodeOnly(strToEncode);
+
+                                        copyToClipboard(" " + encodedStr,"3y3 copied to clipboard!");
+                                    },
+                                    onMouseOver: (e) => {
+                                        setHighlighted(true);
+                                    },
+                                    onMouseLeave: (e) => {
+                                        setHighlighted(false);
+                                    },
+                                    title: nameplate.name
+                                })
+                            }
+                            nameplatesList.push(createElement(nameplateCopier,{nameplate,skuId}));
                         }
                     }
-                    return React.createElement('div',{
+                    let onKeyDown = (e) => {
+                        if(e.keyCode == 13) {
+                            let strToEncode = `n{${skuIdBox},${paletteBox}}`;
+                            let encodedStr = secondsightifyEncodeOnly(strToEncode);
+
+                            copyToClipboard(" " + encodedStr,"3y3 copied to clipboard!");
+                        }
+                    };
+                    return createElement('div',{
                         children: [
-                            React.createElement(Components.TextInput,{
+                            settings.advancedProfileCustomization ? createElement(Components.TextInput,{
+                                value: skuIdBox,
+                                placeholder: "Custom SKU ID... (enter to copy)",
+                                onChange: (input) => setSkuIdBox(input),
+                                onKeyDown
+                            }) : null,
+                            settings.advancedProfileCustomization ? createElement(Components.TextInput,{
+                                value: paletteBox,
+                                placeholder: "Palette... (enter to copy)",
+                                onChange: (input) => setPaletteBox(input),
+                                onKeyDown
+                            }) : null,
+                            settings.advancedProfileCustomization ? createElement('br') : null,
+                            settings.advancedProfileCustomization ? createElement('br') : null,
+                            createElement(Components.SearchInput,{
                                 value: query,
                                 placeholder: "Search...",
-                                onChange: (input) => setQuery(input)
+                                onChange: (e) => {
+                                    setQuery(e.target.value);
+                                }
                             }),
-                            React.createElement('br'),
-                            React.createElement('div',{
-                                children: nameplatesList
+                            createElement('div',{
+                                children: nameplatesList,
+                                style: {
+                                    height: "460px",
+                                    overflowY: "scroll",
+                                    backgroundColor: "var(--input-background-default)"
+                                },
+                                className: "bd-scroller-thin"
                             })
                         ],
                     });
                 }
             } else {
-                return React.createElement('h1',{
+                return createElement('h1',{
                     children: "Error: Nameplate Preview element is undefined!",
                     style: {
                         color: "red",
@@ -1236,7 +1349,7 @@ module.exports = class YABDP4Nitro {
             }
         }
 
-        return React.createElement("button",{
+        return createElement("button",{
             className: `yabd-generic-button`,
             style: {
                 height: "30px",
@@ -1246,7 +1359,7 @@ module.exports = class YABDP4Nitro {
             },
             children: "Change Nameplate [YABDP4Nitro]",
             onClick: () => {
-                UI.showConfirmationModal("Change Nameplate",React.createElement(NameplateList,{NameplatePreviewName}),{cancelText: ""})
+                UI.showConfirmationModal("Change Nameplate",createElement(NameplateList,{NameplatePreviewName}),{cancelText: ""})
             }
         });
     }
@@ -1260,7 +1373,7 @@ module.exports = class YABDP4Nitro {
                 
                 if(ret?.props?.children){
                     ret.props.children = [ret.props.children];
-                    ret.props.children.push(React.createElement(this.CreateNameplateButton, {self: this}));
+                    ret.props.children.push(createElement(this.CreateNameplateButton, {self: this}));
                 }
             });
         }
@@ -1271,6 +1384,7 @@ module.exports = class YABDP4Nitro {
 
     DecorButton({secondsightifyEncodeOnly}){
         function AvatarDecorations() {
+            const [skuId, setSkuId] = useState("");
             if(!data.avatarDecorations) throw new Error(`Cannot possibly continue! Avatar decoration data is undefined! Did the data JSON fail to load?`)
             let listOfDecorationIds = Object.keys(data.avatarDecorations);
             let avatarDecorationChildren = [];
@@ -1292,7 +1406,7 @@ module.exports = class YABDP4Nitro {
                     let encodedStr = secondsightifyEncodeOnly("/a" + decorationId); // /a[id]
                     //javascript that runs onclick for each avatar decoration button
 
-                    let child = React.createElement("img",{
+                    let child = createElement("img",{
                         style: {
                             width: "23%",
                             cursor: "pointer",
@@ -1317,16 +1431,36 @@ module.exports = class YABDP4Nitro {
                     //add newline every 4th decoration
                     if((i + 1) % 4 == 0) {
                         //avatarDecorationsHTML += "<br>"
-                        avatarDecorationChildren.push(React.createElement("br"));
+                        avatarDecorationChildren.push(createElement("br"));
                     }
                 }
             }
-            return React.createElement('div',{
-                children: avatarDecorationChildren
+            return createElement('div',{
+                children: [
+                    settings.advancedProfileCustomization ? createElement(Components.TextInput, {
+                        value: skuId,
+                        placeholder: "Custom SKU ID... (enter to copy)",
+                        onKeyDown: (e) => {
+                            if(e.keyCode == 13){
+                                let encodedStr = secondsightifyEncodeOnly("/a" + skuId);
+                                copyToClipboard(" " + encodedStr, "3y3 copied to clipboard!");
+                            }
+                        },
+                        onChange: (value) => {
+                            setSkuId(value);
+                        },
+                        style: {
+                            backgroundColor: `var(--control-secondary-background-default)`
+                        }
+                    }): null,
+                    settings.advancedProfileCustomization ? createElement("br") : null,
+                    settings.advancedProfileCustomization ? createElement("br") : null,
+                    ...avatarDecorationChildren
+                ]
             });
         }
         function DecorModal() {
-            return React.createElement("div",{
+            return createElement("div",{
                 style: {
                     width: "100%",
                     display: "block",
@@ -1335,11 +1469,11 @@ module.exports = class YABDP4Nitro {
                     overflow: "visible",
                     marginTop: ".5em"
                 },
-                children: React.createElement(AvatarDecorations)
+                children: createElement(AvatarDecorations)
             });
         }
 
-        return React.createElement("button",{
+        return createElement("button",{
             id: "decorationButton",
             children: "Change Decoration [YABDP4Nitro]",
             style: {
@@ -1350,7 +1484,7 @@ module.exports = class YABDP4Nitro {
             },
             className: "yabd-generic-button",
             onClick: () => {
-                UI.showConfirmationModal("Change Avatar Decoration (YABDP4Nitro)",React.createElement(DecorModal),{cancelText: ""});
+                UI.showConfirmationModal("Change Avatar Decoration (YABDP4Nitro)",createElement(DecorModal),{cancelText: ""});
             }
         })
     }
@@ -1371,7 +1505,7 @@ module.exports = class YABDP4Nitro {
             //push change decoration button
             if(ret?.props?.children?.props?.children){
                 ret.props.children.props.children.push(
-                    React.createElement(this.DecorButton, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly})
+                    createElement(this.DecorButton, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly})
                 );
             }else{
                 Logger.error("Decoration Section ain't right chief.")
@@ -1411,7 +1545,7 @@ module.exports = class YABDP4Nitro {
                 };
 
                 profileEffectChildren.push(
-                    React.createElement("img", {
+                    createElement("img", {
                         className: "riolubruhsSecretStuff",
                         onClick: copyDecoration3y3,
                         src: previewURL,
@@ -1429,25 +1563,30 @@ module.exports = class YABDP4Nitro {
                 //add newline every 4th profile effect
                 if((actualRuns + 1) % 4 == 0){
                     profileEffectChildren.push(
-                        React.createElement("br")
+                        createElement("br")
                     );
                 }
 
                 actualRuns++;
             }
-            return React.createElement('div', {
+            return createElement('div', {
                 children: profileEffectChildren,
                 style: {
-                    paddingTop: "10px"
-                }
+                    paddingTop: "10px",
+                    height: "460px",
+                    overflowY: "scroll",
+                    backgroundColor: "var(--input-background-default)"
+                },
+                className: "bd-scroller-thin"
             });
         }
 
         //Profile Effects Modal
         function EffectsModal(){
-            const [query,setQuery] = React.useState("");
+            const [query,setQuery] = useState("");
+            const [skuId, setSkuId] = useState("");
 
-            return React.createElement("div", {
+            return createElement("div", {
                 style: {
                     width: "100%",
                     display: "block",
@@ -1457,21 +1596,38 @@ module.exports = class YABDP4Nitro {
                     marginTop: ".5em"
                 },
                 children: [
-                    React.createElement(Components.TextInput, {
+                    settings.advancedProfileCustomization ? createElement(Components.TextInput, {
+                        value: skuId,
+                        placeholder: "Custom SKU ID... (enter to copy)",
+                        onKeyDown: (e) => {
+                            if(e.keyCode == 13){
+                                let encodedStr = secondsightifyEncodeOnly("fx" + skuId);
+                                copyToClipboard(" " + encodedStr, "3y3 copied to clipboard!");
+                            }
+                        },
+                        onChange: (value) => {
+                            setSkuId(value);
+                        },
+                        style: {
+                            backgroundColor: `var(--control-secondary-background-default)`
+                        }
+                    }) : null,
+                    settings.advancedProfileCustomization ? createElement('br') : null,
+                    settings.advancedProfileCustomization ? createElement('br') : null,
+                    createElement(Components.SearchInput, {
                         value: query,
                         placeholder: "Search...",
-                        onChange: (input) => setQuery(input),
+                        onChange: (e) => setQuery(e.target.value),
                         style: {
                             backgroundColor: `var(--control-secondary-background-default)`
                         }
                     }),
-                    React.createElement('br'),
-                    React.createElement(ProfileEffects, {query})
+                    createElement(ProfileEffects, {query})
                 ]
             });
         }
 
-        return React.createElement("button", {
+        return createElement("button", {
             children: "Change Effect [YABDP4Nitro]",
             className: `yabd-generic-button`,
             size: "bd-button-small",
@@ -1483,7 +1639,7 @@ module.exports = class YABDP4Nitro {
                 marginLeft: "4px"
             },
             onClick: () => {
-                UI.showConfirmationModal("Change Profile Effect (YABDP4Nitro)",React.createElement(EffectsModal),{cancelText: ""});
+                UI.showConfirmationModal("Change Profile Effect (YABDP4Nitro)",createElement(EffectsModal),{cancelText: ""});
             }
         })
     }
@@ -1506,7 +1662,7 @@ module.exports = class YABDP4Nitro {
             //Append Change Effect button
             ret.props.children.props.children.push(
                 //self explanatory create react element
-                React.createElement(this.EffectsButton, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly})
+                createElement(this.EffectsButton, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly})
             );
         }); //end patch of profile effect section renderer function
     }
@@ -1514,7 +1670,7 @@ module.exports = class YABDP4Nitro {
 
     //#region Banner UI
     CustomBannerInput({secondsightifyEncodeOnly}) {
-        let profileBannerUrlInput = React.createElement("input",{
+        let profileBannerUrlInput = createElement("input",{
             id: "profileBannerUrlInput",
             placeholder: "Banner Imgur URL",
             style: {
@@ -1526,14 +1682,14 @@ module.exports = class YABDP4Nitro {
             }
         });
 
-        return React.createElement('div',{
+        return createElement('div',{
             style: {
                 marginTop: "8px",
                 display: "flex",
             },
             children: [
                 profileBannerUrlInput,
-                React.createElement("button",{
+                createElement("button",{
                     id: "profileBannerButton",
                     children: "Copy Banner 3y3",
                     className: `yabd-generic-button`,
@@ -1650,7 +1806,7 @@ module.exports = class YABDP4Nitro {
             
             if(ret?.props?.children){
                 ret.props.children = [ret.props.children];
-                ret.props.children.push(React.createElement(this.CustomBannerInput, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly})); //end of profileBannerButton element push
+                ret.props.children.push(createElement(this.CustomBannerInput, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly})); //end of profileBannerButton element push
             }
 
         }); //end of patched function
@@ -1669,7 +1825,7 @@ module.exports = class YABDP4Nitro {
             ret.props.disabled = false;
 
             ret.props.children.props.children.push( //append copy colors 3y3 button
-                React.createElement("button", {
+                createElement("button", {
                     id: "copy3y3button",
                     children: "Copy Colors 3y3",
                     className: `yabd-generic-button`,
@@ -1839,7 +1995,7 @@ module.exports = class YABDP4Nitro {
     
                 if(ret && font && effect && colors){
                     if(ret?.props?.children?.props?.children?.props?.children){
-                        ret.props.children.props.children.props.children.splice(1, 0, React.createElement(Components.Button, {
+                        ret.props.children.props.children.props.children.splice(1, 0, createElement(Components.Button, {
                             children: "Copy 3y3",
                             color: Components.Button.Colors.PRIMARY,
                             look: Components.Button.Looks.OUTLINED,
@@ -1873,7 +2029,7 @@ module.exports = class YABDP4Nitro {
 
         if(this.DisplayNameSection && this.DisplayNameStylesSection && renderFn2){
             Patcher.after(this.DisplayNameSection, renderFn2, (_, [args], ret) => {
-                ret.props.children.splice(1,0,React.createElement(this.DisplayNameStylesSection,{
+                ret.props.children.splice(1,0,createElement(this.DisplayNameStylesSection,{
                     user: args.user,
                     className: "yabd-marginTop24"
                 }));
@@ -1905,24 +2061,24 @@ module.exports = class YABDP4Nitro {
                         percentNormal = 100 - percentSharpened;
                     }
     
-                    ret.props.children.push(React.createElement('svg',{
-                        children: React.createElement("filter",{
+                    ret.props.children.push(createElement('svg',{
+                        children: createElement("filter",{
                             id: "yabd-svgSharpen-" + args.userId,
                             colorInterpolationFilters: "sRGB",
                             children: [
-                                React.createElement('feConvolveMatrix',{
+                                createElement('feConvolveMatrix',{
                                     order: "3",
                                     kernelMatrix: "0 -1 0 -1 5 -1 0 -1 0",
                                     result: "sharpen"
                                 }),
-                                React.createElement('feComposite',{
+                                createElement('feComposite',{
                                     in: "SourceGraphic",
                                     in2: "sharpen",
                                     operator: "arithmetic",
                                     result: "userPreference",
                                     k1: "0",k2: (percentNormal / 100),k3: (percentSharpened / 100),k4: "0"
                                 }),
-                                React.createElement('feComposite',{
+                                createElement('feComposite',{
                                     id: `yabd-svgSharpen-${args.userId}-size`,
                                     in: "SourceGraphic",
                                     in2: "userPreference",
@@ -1934,7 +2090,7 @@ module.exports = class YABDP4Nitro {
                     }));
     
                     //I could have made this part work a bit better, but I don't feel like it right now honestly.
-                    ret.props.children.push(React.createElement(ResizeFindingElement, {
+                    ret.props.children.push(createElement(ResizeFindingElement, {
                         id: `yabd-sharpen-resize-div-${args.userId}`,
                         onResize: (width, height) => {
                             //get the part of the filter that compares the user preference to the source graphic
@@ -2004,25 +2160,25 @@ module.exports = class YABDP4Nitro {
                                         if(filterIntensityFactoringScreen > 1) filterIntensityFactoringScreen = 1; //and normalize it to at most 1
                                         //and then we use this value to determine how much to sharpen the PIP window after the user's preference is considered in the second feComposite
 
-                                        ret.props.children.push(React.createElement('svg',{
+                                        ret.props.children.push(createElement('svg',{
                                             children: [
-                                                React.createElement("filter",{
+                                                createElement("filter",{
                                                     id: "yabd-svgSharpen-" + userId + "-pip",
                                                     colorInterpolationFilters: "sRGB",
                                                     children: [
-                                                        React.createElement('feConvolveMatrix',{
+                                                        createElement('feConvolveMatrix',{
                                                             order: "3",
                                                             kernelMatrix: "0 -0.5 0 -0.5 3 -0.5 0 -0.5 0", //weaker kernel than the CallTiles since the PIP is always smaller than them and we want them to be fairly close in perceived sharpness
                                                             result: "sharpen"
                                                         }),
-                                                        React.createElement('feComposite',{
+                                                        createElement('feComposite',{
                                                             in: "SourceGraphic",
                                                             in2: "sharpen",
                                                             operator: "arithmetic",
                                                             k1: "0",k2: (normalPercent / 100),k3: (sharpnessPercent / 100),k4: "0",
                                                             result: "userPreference"
                                                         }),
-                                                        React.createElement('feComposite',{
+                                                        createElement('feComposite',{
                                                             in: "SourceGraphic",
                                                             in2: "userPreference",
                                                             operator: "arithmetic",
@@ -2079,12 +2235,12 @@ module.exports = class YABDP4Nitro {
                 }
     
                 reactElem.props.children.props.children.splice(2,0,
-                    React.createElement(ContextMenu.Item,
+                    createElement(ContextMenu.Item,
                         {
                             id: "yabd-sharpness-slider",
-                            label: () => React.createElement(ContextMenuSlider,{
+                            label: () => createElement(ContextMenuSlider,{
                                 initialValue,
-                                label: React.createElement(Components.Text, { //Default label is the wrong size so this uses the text component lol
+                                label: createElement(Components.Text, { //Default label is the wrong size so this uses the text component lol
                                     children: "Sharpness",
                                     style: {
                                         fontSize: "14px",
@@ -2410,7 +2566,7 @@ module.exports = class YABDP4Nitro {
                 
                 //add YABD button
                 if(RightButtonGroup) {
-                    RightButtonGroup.children.splice(2,0,React.createElement("button",{
+                    RightButtonGroup.children.splice(2,0,createElement("button",{
                         class: "yabd-resolution-swapper-v2-button",
                         children: 'YABD',
                         onClick: () => {
@@ -2430,33 +2586,33 @@ module.exports = class YABDP4Nitro {
                             }
     
                             UI.showConfirmationModal("Configure Stream Settings",[
-                                React.createElement('div', {
+                                createElement('div', {
                                     children: [
-                                        React.createElement('div', {
+                                        createElement('div', {
                                             style: {
                                                 display: "flex",
                                                 width: "100%",
                                                 justifyContent: "space-around"
                                             },
                                             children: [
-                                                React.createElement("h1",{
+                                                createElement("h1",{
                                                     children: "Resolution",
                                                     className: `yabd-text-h5`
                                                 }),
-                                                React.createElement("h1",{
+                                                createElement("h1",{
                                                     children: "FPS",
                                                     className: `yabd-text-h5`
                                                 }),
                                             ]
                                         }),
-                                        React.createElement('div', {
+                                        createElement('div', {
                                             style: {
                                                 display: "flex",
                                                 width: "100%",
                                                 justifyContent: "space-around"
                                             },
                                             children: [
-                                                React.createElement(Components.NumberInput,{
+                                                createElement(Components.NumberInput,{
                                                     value: settings.CustomResolution,
                                                     min: -1,
                                                     onChange: (input) => {
@@ -2466,7 +2622,7 @@ module.exports = class YABDP4Nitro {
                                                         localStreamOptions.resolutionToSet = input;
                                                     }
                                                 }),
-                                                React.createElement(Components.NumberInput,{
+                                                createElement(Components.NumberInput,{
                                                     value: settings.CustomFPS,
                                                     min: -1,
                                                     onChange: (input) => {
@@ -2480,33 +2636,33 @@ module.exports = class YABDP4Nitro {
                                         }),
                                     ]
                                 }),
-                                settings.CustomBitrateEnabled ? React.createElement("br") : undefined,
-                                settings.CustomBitrateEnabled ? React.createElement("h1",{
+                                settings.CustomBitrateEnabled ? createElement("br") : undefined,
+                                settings.CustomBitrateEnabled ? createElement("h1",{
                                     children: "Custom Bitrate (kbps)",
                                     className: `yabd-text-h5`
                                 }) : undefined,
-                                settings.CustomBitrateEnabled ? React.createElement('div', {
+                                settings.CustomBitrateEnabled ? createElement('div', {
                                     style: {
                                         display: "flex",
                                         width: "100%",
                                         justifyContent: "space-around",
                                     },
                                     children: [
-                                        React.createElement("h1", {
+                                        createElement("h1", {
                                             children: "Min",
                                             style: {
                                                 marginBlock: "0 5px",
                                             },
                                             className: `yabd-text-h5`
                                         }),
-                                        React.createElement("h1", {
+                                        createElement("h1", {
                                             children: "Target",
                                             style: {
                                                 marginBlock: "0 5px",
                                             },
                                             className: `yabd-text-h5`
                                         }),
-                                        React.createElement("h1", {
+                                        createElement("h1", {
                                             children: "Max",
                                             style: {
                                                 marginBlock: "0 5px",
@@ -2515,7 +2671,7 @@ module.exports = class YABDP4Nitro {
                                         }),
                                     ]
                                 }) : undefined,
-                                React.createElement('div',{
+                                createElement('div',{
                                     style: {
                                         display: "flex",
                                         width: "100%",
@@ -2523,7 +2679,7 @@ module.exports = class YABDP4Nitro {
                                         marginBottom: "5px"
                                     },
                                     children: settings.CustomBitrateEnabled ? [
-                                        React.createElement(Components.NumberInput,{
+                                        createElement(Components.NumberInput,{
                                             value: settings.minBitrate,
                                             min: -1,
                                             onChange: (input) => {
@@ -2532,7 +2688,7 @@ module.exports = class YABDP4Nitro {
                                                 localStreamOptions.minBitrateToSet = input;
                                             }
                                         }),
-                                        React.createElement(Components.NumberInput,{
+                                        createElement(Components.NumberInput,{
                                             value: settings.targetBitrate,
                                             min: -1,
                                             onChange: (input) => {
@@ -2541,7 +2697,7 @@ module.exports = class YABDP4Nitro {
                                                 localStreamOptions.targetBitrateToSet = input;
                                             }
                                         }),
-                                        React.createElement(Components.NumberInput,{
+                                        createElement(Components.NumberInput,{
                                             value: settings.maxBitrate,
                                             min: -1,
                                             onChange: (input) => {
@@ -2696,7 +2852,7 @@ module.exports = class YABDP4Nitro {
         let ffmpegArgs = ["-i",inFileName,"-f","lavfi","-i","color=c=black:s=300x100","-shortest","-fflags","+shortest",
             "-map","0:v?","-map","1:v","-map","0:a","-disposition:v","default","-brand","isom/avc1","-movflags","+faststart",
             "-map_metadata","-1","-dn","-map_chapters","-1","-preset","ultrafast","-c:v","libx264","-c:a","copy","-strict","-2",
-            "-tune","stillimage","-r","1","-pix_fmt","yuv420p","-vf","crop=trunc(iw/2)*2:trunc(ih/2)*2",outFileName];
+            "-tune","stillimage","-r","5","-pix_fmt","yuv420p","-vf","crop=trunc(iw/2)*2:trunc(ih/2)*2",outFileName];
 
         return await this.ffmpegTransmux(arrayBuffer,inFileName,ffmpegArgs,outFileName);
     }
@@ -3328,7 +3484,7 @@ module.exports = class YABDP4Nitro {
         
                     if(onSaveTheme){
                         //replace the original footer with a custom one
-                        ret.props.children[1] = React.createElement('div', {
+                        ret.props.children[1] = createElement('div', {
                             style: {
                                 display: "flex",
                                 gap: "25px",
@@ -3336,7 +3492,7 @@ module.exports = class YABDP4Nitro {
                                 borderTop: "1px solid var(--border-subtle)"
                             },
                             children: [
-                                React.createElement(Components.Button, {
+                                createElement(Components.Button, {
                                     children: "Back",
                                     className: "yabd-secondary-button",
                                     style: {
@@ -3352,7 +3508,7 @@ module.exports = class YABDP4Nitro {
                                         });
                                     }
                                 }),
-                                React.createElement(Components.Button, {
+                                createElement(Components.Button, {
                                     children: "Apply",
                                     style: {
                                         width: "100%",
@@ -3687,11 +3843,8 @@ module.exports = class YABDP4Nitro {
             //slice off the /a and just store the ID number
             let assetId = firstMatch.slice(2);
 
-            //if this decoration is not in the list, return
-            if(avatarDecorations[assetId] == undefined) return;
-
-            //if this user does not have an avatar decoration, or the avatar decoration data does not match the one in the avatar decorations array,
-            if(ret.avatarDecorationData == undefined || ret.avatarDecorationData?.asset != avatarDecorations[assetId]){
+            //dont override real avatar decoration
+            if(ret.avatarDecorationData == undefined){
                 //set avatar decoration data to fake avatar decoration
                 ret.avatarDecorationData = {
                     asset: avatarDecorations[assetId],
@@ -4270,7 +4423,7 @@ module.exports = class YABDP4Nitro {
                         let key = contentItem.key; //store key
 
                         //create discord emoji react element
-                        let emoteElement = React.createElement(MessageEmojiReact, {
+                        let emoteElement = createElement(MessageEmojiReact, {
                             node: {
                                 name: `:${emojiName}:`,
                                 src: contentItem.props.href.split("?")[0] + "?size=48",
@@ -4602,7 +4755,7 @@ module.exports = class YABDP4Nitro {
             if(currentDesktopIcon == "AppIcon"){
                 return ogFunction(args);
             }else{
-                return React.createElement(CustomAppIcon, {
+                return createElement(CustomAppIcon, {
                     id: currentDesktopIcon,
                     size: 40
                 });
