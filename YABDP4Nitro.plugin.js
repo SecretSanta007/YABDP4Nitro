@@ -2,7 +2,7 @@
  * @name YABDP4Nitro
  * @author Riolubruh
  * @authorLink https://github.com/riolubruh
- * @version 6.10.0
+ * @version 6.10.1
  * @invite HfFxUbgsBc
  * @source https://github.com/riolubruh/YABDP4Nitro
  * @donate https://github.com/riolubruh/YABDP4Nitro?tab=readme-ov-file#donate
@@ -266,20 +266,17 @@ const config = {
             "discord_id": "359063827091816448",
             "github_username": "riolubruh"
         }],
-        "version": "6.10.0",
+        "version": "6.10.1",
         "description": "Unlock all screensharing modes, use cross-server & GIF emotes, and more!",
         "github": "https://github.com/riolubruh/YABDP4Nitro",
         "github_raw": "https://raw.githubusercontent.com/riolubruh/YABDP4Nitro/main/YABDP4Nitro.plugin.js"
     },
     changelog: [
         {
-            title: "6.10.0",
+            title: "6.10.1",
             items: [
-                "Improved UI for searching nameplates and effects.",
-                "Added Advanced Profile Editing, which adds the ability to manually specify SKU ID for decorations and effects, and SKU ID and Palette for Nameplates, allowing you to use illegal combinations for SKU ID and Palettes, and any decoration or effect even if it is not in the list provided by the plugin. Off by default.",
-                "Nameplates in Change Fake Nameplate menu now only animate on hover, greatly reducing the amount of lag.",
-                "Added profile colors to 3y3 Copying Zone.",
-                "Code improvements."
+                "Made Fake Avatar Decorations take priority over (overwrite) real ones.",
+                "Prevent invalid decorations from getting added to the list of available decorations."
             ]
         }
     ],
@@ -3820,7 +3817,7 @@ module.exports = class YABDP4Nitro {
                 //error check
                 if(avatarDecorations){
                     //dont process fake avatar decorations
-                    if(ret.avatarDecorationData.sku_id != "0"){
+                    if(ret.avatarDecorationData.sku_id != "0" && ret.avatarDecorationData.asset){
                         //cache avatar decoration
                         avatarDecorations[ret.avatarDecorationData.skuId] = ret.avatarDecorationData.asset;
                     }
@@ -3843,17 +3840,14 @@ module.exports = class YABDP4Nitro {
             //slice off the /a and just store the ID number
             let assetId = firstMatch.slice(2);
 
-            //dont override real avatar decoration
-            if(ret.avatarDecorationData == undefined){
-                //set avatar decoration data to fake avatar decoration
-                ret.avatarDecorationData = {
-                    asset: avatarDecorations[assetId],
-                    skuId: assetId
-                };
+            //set avatar decoration data to fake avatar decoration
+            ret.avatarDecorationData = {
+                asset: avatarDecorations[assetId],
+                skuId: assetId
+            };
 
-                //add user to the list of users to show with the YABDP4Nitro user badge if we haven't already.
-                if(!badgeUserIDs.includes(ret.id)) badgeUserIDs.push(ret.id);
-            }
+            //add user to the list of users to show with the YABDP4Nitro user badge if we haven't already.
+            if(!badgeUserIDs.includes(ret.id)) badgeUserIDs.push(ret.id);
         }); //end of getUser patch for avatar decorations
     } //End of fakeAvatarDecorations()
     // #endregion
