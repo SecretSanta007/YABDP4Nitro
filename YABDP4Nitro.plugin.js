@@ -2,7 +2,7 @@
  * @name YABDP4Nitro
  * @author Riolubruh
  * @authorLink https://github.com/riolubruh
- * @version 6.10.1
+ * @version 6.10.2
  * @invite HfFxUbgsBc
  * @source https://github.com/riolubruh/YABDP4Nitro
  * @donate https://github.com/riolubruh/YABDP4Nitro?tab=readme-ov-file#donate
@@ -266,17 +266,16 @@ const config = {
             "discord_id": "359063827091816448",
             "github_username": "riolubruh"
         }],
-        "version": "6.10.1",
+        "version": "6.10.2",
         "description": "Unlock all screensharing modes, use cross-server & GIF emotes, and more!",
         "github": "https://github.com/riolubruh/YABDP4Nitro",
         "github_raw": "https://raw.githubusercontent.com/riolubruh/YABDP4Nitro/main/YABDP4Nitro.plugin.js"
     },
     changelog: [
         {
-            title: "6.10.1",
+            title: "6.10.2",
             items: [
-                "Made Fake Avatar Decorations take priority over (overwrite) real ones.",
-                "Prevent invalid decorations from getting added to the list of available decorations."
+                "Fixed 3y3 Copying Zone button not appearing after Disord update."
             ]
         }
     ],
@@ -894,39 +893,45 @@ module.exports = class YABDP4Nitro {
         if(!this.UserProfileModalV2) return;
 
         this.overrideVariant("2026-06-wysiwyg-show-dns-to-non-nitro", 1);
-        // console.log(UserProfileModalV2);
+        
         Patcher.instead(this.UserProfileModalV2, this.findMangledName(this.UserProfileModalV2, x=>x), (_,[args],og) => {
             let ret = og(args);
             const editPanel = ret?.props?.children?.props?.children?.props?.children?.props?.children?.props?.children?.[0]?.props?.children?.props?.children?.[1]?.props?.children?.[0]?.props?.children?.[0];
             if(editPanel){
                 nodePatcher.patch(editPanel, (props,res) => {
-                    const leftPanelInner = res?.props?.children?.props?.children?.[2]?.props?.children?.[0]?.props?.children;
-                    if(leftPanelInner){
-                        // please god let this be a temporary hackfix
-                        leftPanelInner?.props?.children?.push?.(createElement("button", {
-                            children: "3y3 Copying Zone",
-                            className: `yabd-secondary-button`,
-                            style: {
-                                height: "30px"
-                            },
-                            onClick: () => {
-                                UI.showConfirmationModal("3y3 Copying Zone", createElement("div", {
-                                    children: [
-                                        createElement(this.newProfileThemesUI),
-                                        createElement("br"),
-                                        createElement(this.CustomPFPInput, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
-                                        createElement("br"),
-                                        createElement(this.CustomBannerInput, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
-                                        createElement("br"),
-                                        createElement(this.CreateNameplateButton, {self: this}),
-                                        createElement("br"),
-                                        createElement(this.DecorButton, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
-                                        createElement("br"),
-                                        createElement(this.EffectsButton, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
-                                    ]
-                                }), {cancelText: ""})
+                    //what the fuck am i even doing gng
+                    const leftPanel = res?.props?.children?.props?.children?.[1];
+                    if(leftPanel){
+                        nodePatcher.patch(leftPanel, (props2,ret2) => {
+                            const leftPanelInner = ret2?.props?.children?.[1]?.props?.children;
+                            if(leftPanelInner){
+                                // please god let this be a temporary hackfix
+                                leftPanelInner?.props?.children?.push?.(createElement("button", {
+                                    children: "3y3 Copying Zone",
+                                    className: `yabd-secondary-button`,
+                                    style: {
+                                        height: "30px"
+                                    },
+                                    onClick: () => {
+                                        UI.showConfirmationModal("3y3 Copying Zone", createElement("div", {
+                                            children: [
+                                                createElement(this.newProfileThemesUI),
+                                                createElement("br"),
+                                                createElement(this.CustomPFPInput, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
+                                                createElement("br"),
+                                                createElement(this.CustomBannerInput, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
+                                                createElement("br"),
+                                                createElement(this.CreateNameplateButton, {self: this}),
+                                                createElement("br"),
+                                                createElement(this.DecorButton, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
+                                                createElement("br"),
+                                                createElement(this.EffectsButton, {secondsightifyEncodeOnly: this.secondsightifyEncodeOnly}),
+                                            ]
+                                        }), {cancelText: ""})
+                                    }
+                                }))
                             }
-                        }))
+                        });
                     }
                 })
             }
