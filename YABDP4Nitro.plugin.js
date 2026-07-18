@@ -275,7 +275,7 @@ const config = {
         {
             title: "6.10.2",
             items: [
-                "Fixed 3y3 Copying Zone button not appearing after Disord update."
+                "Fixed 3y3 Copying Zone button not appearing after Discord update."
             ]
         }
     ],
