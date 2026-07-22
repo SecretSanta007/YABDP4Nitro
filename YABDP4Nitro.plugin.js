@@ -2,7 +2,7 @@
  * @name YABDP4Nitro
  * @author Riolubruh
  * @authorLink https://github.com/riolubruh
- * @version 6.10.2
+ * @version 6.10.3
  * @invite HfFxUbgsBc
  * @source https://github.com/riolubruh/YABDP4Nitro
  * @donate https://github.com/riolubruh/YABDP4Nitro?tab=readme-ov-file#donate
@@ -266,16 +266,16 @@ const config = {
             "discord_id": "359063827091816448",
             "github_username": "riolubruh"
         }],
-        "version": "6.10.2",
+        "version": "6.10.3",
         "description": "Unlock all screensharing modes, use cross-server & GIF emotes, and more!",
         "github": "https://github.com/riolubruh/YABDP4Nitro",
         "github_raw": "https://raw.githubusercontent.com/riolubruh/YABDP4Nitro/main/YABDP4Nitro.plugin.js"
     },
     changelog: [
         {
-            title: "6.10.2",
+            title: "6.10.3",
             items: [
-                "Fixed 3y3 Copying Zone button not appearing after Discord update."
+                "Switch animated emojis to use WEBP instead of GIF to prevent \"Invalid resource\" error."
             ]
         }
     ],
@@ -2321,12 +2321,9 @@ module.exports = class YABDP4Nitro {
                 if(emojiId){
                     let emoji = EmojiStore.getCustomEmojiById(emojiId);
                     if(emoji){
-                        if(!emoji.animated && settings.PNGemote)
-                            src = src.replace('.webp', '.png');
-                        if(emoji.animated){
-                            src = src.replace('.webp', '.gif');
-                            src = src.replace('.avif', '.gif');
-                        }    
+                        if(!emoji.animated && settings.PNGemote){
+                            src = src.replace('.webp', '.png'); 
+                        }
                     } 
                 }
             }
@@ -3859,7 +3856,6 @@ module.exports = class YABDP4Nitro {
 
     //#region Emote Uploader
     async UploadEmote(url, channelIdLmao, msg, emoji, runs, send){
-
         if(!msg[2].attachmentsToUpload) msg[2].attachmentsToUpload = [];
         if(emoji == undefined){
             emoji = {animated: true, name: "default"};
@@ -3869,13 +3865,8 @@ module.exports = class YABDP4Nitro {
             msg = [channelIdLmao, {content: ""}, []];
         }
 
-        let extension = ".gif";
-        if(!emoji.animated){
-            extension = ".png";
-            if(!settings.PNGemote){
-                extension = ".webp";
-            }
-        }
+        let a = url.split("?")[0];
+        let extension = a.slice(a.lastIndexOf("."));
 
         //Download emote by URL, convert to blob, then convert to File object
         let file = await Net.fetch(url).then(r => r.blob()).then(blobFile => new File([blobFile], (emoji.name + extension)));
@@ -4051,13 +4042,12 @@ module.exports = class YABDP4Nitro {
                         if(this.emojiBypassForValidEmoji(emoji, currentChannelId)) return; //Unlocked emoji. Skip.
                         if(emoji.type == "UNICODE") return; //If this "emoji" is actually a unicode character, it doesn't count. Skip bypassing if so.
                         if(emoji.guildId === undefined || emoji.id === undefined || emoji.useSpriteSheet) return; //Skip system emoji.
-                        if(settings.PNGemote) {
+                        if(settings.PNGemote && !emoji.animated) {
                             emoji.forcePNG = true; //replace WEBP with PNG if the option is enabled.
+                        }else{
+                            emoji.forcePNG = false;
                         }
                         let emojiUrl = AvatarDefaults.getEmojiURL(emoji);
-                        if(emoji.animated) {
-                            emojiUrl = emojiUrl.substr(0, emojiUrl.lastIndexOf(".")) + ".gif";
-                        }
 
                         let allNamesString = emoji.originalName ? emoji.originalName : emoji.name;
     
@@ -4072,7 +4062,7 @@ module.exports = class YABDP4Nitro {
                         }
     
                         //remove existing URL parameters and add custom URL parameters for user's size preference. quality is always lossless.
-                        emojiUrl = emojiUrl.split("?")[0] + `?size=${settings.emojiSize}&quality=lossless&`;
+                        emojiUrl = emojiUrl.split("?")[0] + `?size=${settings.emojiSize}&quality=lossless&animated=${emoji.animated}`;
                         //remove emote from message.
                         msg[1].content = msg[1].content.replace(emojiString, "");
     
@@ -4103,7 +4093,7 @@ module.exports = class YABDP4Nitro {
                             }
                             else if(sound?.emojiId != null) { // custom emoji
                                 let emoji = EmojiStore.getCustomEmojiById(sound.emojiId);
-                                msg[1].content = msg[1].content.replace(soundmojis[i], `( [${emoji?.name ? emoji.name : "someCustomEmoji"}](https://cdn.discordapp.com/emojis/${sound.emojiId}.${emoji?.animated ? "gif" : "png"}) ${sound.name} ) `);
+                                msg[1].content = msg[1].content.replace(soundmojis[i], `( [${emoji?.name ? emoji.name : "someCustomEmoji"}](https://cdn.discordapp.com/emojis/${sound.emojiId}.${emoji?.animated ? "webp" : "png"}?size=32&animated=true) ${sound.name} ) `);
                             }
                             else { //no emoji
                                 msg[1].content = msg[1].content.replace(soundmojis[i], `( ${sound.name} ) `);
@@ -4226,13 +4216,11 @@ module.exports = class YABDP4Nitro {
                 msg.validNonShortcutEmojis.forEach(emoji => {
                     if(self.emojiBypassForValidEmoji(emoji, currentChannelId)) return;
                     if(emoji.type == "UNICODE") return;
-                    if(settings.PNGemote) emoji.forcePNG = true;
+                    if(settings.PNGemote && !emoji.animated) emoji.forcePNG = true;
+                    else emoji.forcePNG = false;
 
                     let emojiUrl = AvatarDefaults.getEmojiURL(emoji);
                     if(emoji.guildId === undefined || emoji.id === undefined || emoji.useSpriteSheet) return; //Skip system emoji.
-                    if(emoji.animated){
-                        emojiUrl = emojiUrl.substr(0, emojiUrl.lastIndexOf(".")) + ".gif";
-                    }
 
                     let allNamesString = emoji.originalName ? emoji.originalName : emoji.name;
 
@@ -4242,7 +4230,7 @@ module.exports = class YABDP4Nitro {
                         return; //If there is a heiphen before the emoji, skip it.
                     }
                     emojiInteration++;
-                    msg.content = msg.content.replace(emojiString, emojiUrl.split("?")[0] + `?size=${settings.emojiSize}&quality=lossless&${emojiInteration} `);
+                    msg.content = msg.content.replace(emojiString, emojiUrl.split("?")[0] + `?size=${settings.emojiSize}&quality=lossless&animated=${emoji.animated}&${emojiInteration} `);
                 });
             }
 
@@ -4269,13 +4257,11 @@ module.exports = class YABDP4Nitro {
                 msg.validNonShortcutEmojis.forEach(emoji => {
                     if(self.emojiBypassForValidEmoji(emoji, currentChannelId)) return;
                     if(emoji.type == "UNICODE") return;
-                    if(settings.PNGemote) emoji.forcePNG = true;
+                    if(settings.PNGemote && !emoji.animated) emoji.forcePNG = true;
+                    else emoji.forcePNG = false;
 
                     let emojiUrl = AvatarDefaults.getEmojiURL(emoji);
                     if(emoji.guildId === undefined || emoji.id === undefined || emoji.useSpriteSheet) return; //Skip system emoji.
-                    if(emoji.animated){
-                        emojiUrl = emojiUrl.substr(0, emojiUrl.lastIndexOf(".")) + ".gif";
-                    }
 
                     let allNamesString = emoji.originalName ? emoji.originalName : emoji.name;
 
@@ -4286,7 +4272,7 @@ module.exports = class YABDP4Nitro {
                         return; //If there is a heiphen before the emoji, skip it.
                     }
                     emojiInteration++;
-                    msg.content = msg.content.replace(emojiString, `[${allNamesString}](` + emojiUrl.split("?")[0] + `?size=${settings.emojiSize}&quality=lossless&${emojiInteration})`);
+                    msg.content = msg.content.replace(emojiString, `[${allNamesString}](` + emojiUrl.split("?")[0] + `?size=${settings.emojiSize}&quality=lossless&animated=${emoji.animated}&${emojiInteration})`);
                 });
             }
 
@@ -4317,9 +4303,6 @@ module.exports = class YABDP4Nitro {
     
                     let forcePNG = (!animatedBool && settings.PNGemote);
                     let emojiUrl = AvatarDefaults.getEmojiURL({id, animated: animatedBool, size: settings.emojiSize, forcePNG });
-                    if(animatedBool){
-                        emojiUrl = emojiUrl.substr(0, emojiUrl.lastIndexOf(".")) + ".gif";
-                    }
     
                     
                     emojiInteration++;
@@ -4328,10 +4311,10 @@ module.exports = class YABDP4Nitro {
                         case 0: //upload
                         case 1: //ghost (removed)
                         case 3: //vencord
-                            msg.content = msg.content.replace(emojiString, `[${name}](` + emojiUrl.split("?")[0] + `?size=${settings.emojiSize}&quality=lossless&${emojiInteration})`);
+                            msg.content = msg.content.replace(emojiString, `[${name}](` + emojiUrl.split("?")[0] + `?size=${settings.emojiSize}&quality=lossless&animated=${emoji.animated}&${emojiInteration})`);
                             break;
                         case 2: //classic
-                            msg.content = msg.content.replace(emojiString, emojiUrl.split("?")[0] + `?size=${settings.emojiSize}&quality=lossless&${emojiInteration} `);
+                            msg.content = msg.content.replace(emojiString, emojiUrl.split("?")[0] + `?size=${settings.emojiSize}&quality=lossless&animated=${emoji.animated}&${emojiInteration} `);
                             break;
                         
                     }
@@ -4360,7 +4343,7 @@ module.exports = class YABDP4Nitro {
                         
                         let emojiId = emojiUrl.match(idFromUrlRegex)?.[0];
                         
-                        let animated = (emojiUrl.includes(".gif") || emojiUrl.includes(".avif"));
+                        let animated = (emojiUrl.includes(".gif") || emojiUrl.includes(".avif") || emojiUrl.includes("animated=true"));
                         if(emojiId != undefined && emojiUrl != undefined && emojiName != undefined){
                             msg.content = msg.content.replace(matched, `<${animated ? "a:" : ":"}${emojiName}:${emojiId}>`)
                         }
@@ -4378,7 +4361,7 @@ module.exports = class YABDP4Nitro {
                 if(msg.content.includes("/emojis/")){
                     msg.content.match(emojiUrlRegex)?.forEach?.(emojiUrl => {
                         let emojiId = emojiUrl.match(idFromUrlRegex)?.[0];
-                        let animated = (emojiUrl.includes(".gif") || emojiUrl.includes(".avif"));
+                        let animated = (emojiUrl.includes(".gif") || emojiUrl.includes(".avif") || emojiUrl.includes("animated=true"));
     
                         if(emojiId)
                             msg.content = msg.content.replace(emojiUrl, `<${animated ? "a:" : ":"}emoji:${emojiId}>`)
@@ -4425,7 +4408,7 @@ module.exports = class YABDP4Nitro {
                         let emoteElement = createElement(MessageEmojiReact, {
                             node: {
                                 name: `:${emojiName}:`,
-                                src: contentItem.props.href.split("?")[0] + "?size=48",
+                                src: contentItem.props.href,
                                 type: "emoji",
                                 emojiId: contentItem.props.href.replace("https://cdn.discordapp.com/emojis/", "").split(".")[0],
                                 animated: true,
