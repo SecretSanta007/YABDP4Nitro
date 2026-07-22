@@ -2,7 +2,7 @@
  * @name YABDP4Nitro
  * @author Riolubruh
  * @authorLink https://github.com/riolubruh
- * @version 6.10.3
+ * @version 6.10.4
  * @invite HfFxUbgsBc
  * @source https://github.com/riolubruh/YABDP4Nitro
  * @donate https://github.com/riolubruh/YABDP4Nitro?tab=readme-ov-file#donate
@@ -52,9 +52,7 @@ const {
     EmojiStore,
     AppIconPersistedStoreState,
     ClipsStore,
-    GuildChannelStore,
-    // SavedMessagesStore,
-    // MessageStore
+    GuildChannelStore
  } = Webpack.Stores;
 
 const [
@@ -92,7 +90,8 @@ const [
     CustomUserThemeState,
     CustomUserPanelState,
     SimpleUserAvatar,
-    StreamButtons
+    StreamButtons,
+    DownloadIcon
 ] = Webpack.getBulk(
     {filter: Webpack.Filters.bySource('pendingBanner', 'displayProfile', 'foreignObject'), map: {
         renderBanner: x=>x?.toString?.()?.includes?.("canUsePremiumProfileCustomization")
@@ -158,7 +157,9 @@ const [
         ApplicationStreamFPSButtonsWithSuffixLabel: o => Array.isArray(o) && typeof o[0]?.label === 'string' && o[0]?.value === 15,
         ApplicationStreamResolutionButtonsWithSuffixLabel: o => Array.isArray(o) && o[0]?.label === "480p",
         ApplicationStreamResolutions: o => o?.RESOLUTION_1440
-    }}
+    }},
+    {filter: Webpack.Filters.byStrings('M12 2a1 1 0 0 1 1 1v10.59l3.3-3.3a1'), searchExports:true} //DownloadIcon
+    
 );
 const {
     ApplicationStreamFPS,
@@ -266,16 +267,18 @@ const config = {
             "discord_id": "359063827091816448",
             "github_username": "riolubruh"
         }],
-        "version": "6.10.3",
+        "version": "6.10.4",
         "description": "Unlock all screensharing modes, use cross-server & GIF emotes, and more!",
         "github": "https://github.com/riolubruh/YABDP4Nitro",
         "github_raw": "https://raw.githubusercontent.com/riolubruh/YABDP4Nitro/main/YABDP4Nitro.plugin.js"
     },
     changelog: [
         {
-            title: "6.10.3",
+            title: "6.10.4",
             items: [
-                "Switch animated emojis to use WEBP instead of GIF to prevent \"Invalid resource\" error."
+                "Added context menu button to download all attachments from a given message when \"Extra Context Menus and Options\" is enabled.",
+                "Fixed Call Tile Background not working.",
+                "Removed unused bookmarks code."
             ]
         }
     ],
@@ -426,7 +429,7 @@ const config = {
                 { type: "switch", id: "removeScreenshareUpsell", name: "Remove Screen Share Nitro Upsell", note: "Removes the Nitro upsell in the Screen Share quality option menu.", value: () => settings.removeScreenshareUpsell },
                 { type: "switch", id: "unlockAppIcons", name: "App Icons", note: "Unlocks app icons.", value: () => settings.unlockAppIcons },
                 { type: "switch", id: "removeNotStaffWarning", name: "Remove Not Staff Warning", note: "Removes the \"NOT STAFF\" warning on DMs when Experiments are enabled.", value: () => settings.removeNotStaffWarning },
-                { type: "switch", id: "extraContextMenus", name: "Extra Context Menus and Options", note: "Adds a Copy URL and Open URL buttons to the context menu that appears when you right-click an Emoji or Sticker in the Expression Picker, a context menu that will appear with Copy Link and Open Link options when you right-click a GIF in the GIF picker, and a context menu that will appear when right-clicking on user avatars where a context menu wouldn't normally open (ex: blocked/ignored list).", value: () => settings.extraContextMenus},
+                { type: "switch", id: "extraContextMenus", name: "Extra Context Menus and Options", note: "Adds a Copy URL and Open URL buttons to the context menu that appears when you right-click an Emoji or Sticker in the Expression Picker, a context menu that will appear with Copy Link and Open Link options when you right-click a GIF in the GIF picker, a context menu that will appear when right-clicking on user avatars where a context menu wouldn't normally open (ex: blocked/ignored list), and a context menu on messages with attachments that lets you download all attachments.", value: () => settings.extraContextMenus},
                 { type: "switch", id: "experiments", name: "Experiments", note: "Unlocks experiments. Soundmoji and Enable Clips Experiments have to be disabled to turn this off. Use at your own risk.", value: () => (settings.experiments || settings.soundmojiEnabled || (settings.useClipBypass && settings.enableClipsExperiment))},
                 { type: "switch", id: "checkForUpdates", name: "Check for Updates", note: "Should the plugin check for updates on startup?", value: () => settings.checkForUpdates }
             ]
@@ -518,6 +521,7 @@ module.exports = class YABDP4Nitro {
 
         ContextMenu.unpatch('expression-picker', this.expressionPickerFunction);
         ContextMenu.unpatch('stream-context', this.streamContextPatch);
+        ContextMenu.unpatch("message", this.messageContext);
 
         controller.abort();
         controller = new AbortController();
@@ -844,11 +848,14 @@ module.exports = class YABDP4Nitro {
             }
         }
 
-        /* try{
-            this.bookmarks();
-        }catch(err){
-            Logger.error(err);
-        } */
+        if(settings.extraContextMenus){
+            try{
+                ContextMenu.patch("message", this.messageContext);
+            }catch(err){
+                Logger.error(err);
+            }
+        }
+
     } //End of saveAndUpdate()
     // #endregion
 
@@ -1871,59 +1878,7 @@ module.exports = class YABDP4Nitro {
 
     } //End of profileThemesUI()
     //#endregion
-    
-    /* bookmarks(){
-        const temp = Webpack.getById("216623");
-
-        Patcher.instead(temp, "oN", (_,[message],og) => {
-            console.log("put message", message);
-
-            //push message
-            data.savedMessages.push({
-                saveData: message,
-                message: MessageStore.getMessage(message.channelId, message.messageId)
-            });
-
-            console.log(data.savedMessages);
-            
-            Dispatcher.dispatch({
-                type: "SAVED_MESSAGE_CREATE",
-                savedMessage: {
-                    saveData: message,
-                    message: MessageStore.getMessage(message.channelId, message.messageId)
-                }
-            });
-
-            this.saveDataFile();
-
-            return Promise.resolve();
-        })
-
-        //get saved messages
-        Patcher.instead(temp, "AX", () => {
-            console.log("get saved messages", data.savedMessages);
-            Dispatcher.dispatch({
-                type: "SAVED_MESSAGES_UPDATE",
-                savedMessages: data.savedMessages
-            });
-            return Promise.resolve();
-        });
-
-        Patcher.instead(temp, "cf", (_,[message],og) => {
-            //remove bookmark
-            console.log("remove bookmark", message);
-            data.savedMessages = data.savedMessages.filter(x=>x.saveData.messageId != message.messageId);
-            Dispatcher.dispatch({
-                type: "SAVED_MESSAGES_UPDATE",
-                savedMessages: data.savedMessages
-            });
-
-            this.saveDataFile();
-            
-            return Promise.resolve();
-        });
-    } */
-
+   
     applyPremiumType(){
         const currentUser = UserStore.getCurrentUser();
         currentUser.premiumType = settings.changePremiumType2;
@@ -4748,7 +4703,7 @@ module.exports = class YABDP4Nitro {
 
     //#region User Voice Call Tile Background
     async userCallTileBannerBackground(){
-        if(!this.UserCallTile) this.UserCallTile = await Webpack.waitForModule(Webpack.Filters.bySource("getSelectedParticipant","CHANNEL_CALL_POPOUT","avatarDecorationSrc"), {signal: controller.signal});
+        if(!this.UserCallTile) this.UserCallTile = await Webpack.waitForModule(Webpack.Filters.bySource("getSelectedParticipant","CHANNEL_CALL_POPOUT",'avatarDecoration','backgroundSrc','getAvatarURL'), {signal: controller.signal});
         if(!this.UserCallTile) return;
 
         Patcher.instead(this.UserCallTile, this.findMangledName(this.UserCallTile, x=>x.toString?.().includes?.("getSelectedParticipant"), "UserCallTile"), (_,[args],ogFunction) => {
@@ -4773,6 +4728,49 @@ module.exports = class YABDP4Nitro {
         });
     }
     //#endregion
+
+    messageContext(reactElem,context){
+
+        async function downloadFileInClient(url,filename){
+            let dest = await UI.openDialog({
+                mode: "save",
+                title: "Save As",
+                showOverwriteConfirmation: true,
+                defaultPath: process.env.USERPROFILE + "\\Desktop\\" + filename
+            });
+
+            if(dest.canceled) return;
+
+            const file = fs.createWriteStream(dest.filePath);
+            
+            try{
+                let arrayBuffer = await (await (await Net.fetch(url)).blob()).arrayBuffer();
+                await file.write(Buffer.from(arrayBuffer));
+            }catch(err){
+                UI.showToast("An error occurred. Check console for details.", {type:'error'});
+                Logger.error(err);
+            }finally{
+                file.close();
+            }
+        }
+
+        if(context?.message?.attachments.length > 0){
+            const attachments = context?.message?.attachments;
+            if(reactElem?.props?.children?.props?.children) {
+                reactElem.props.children.props.children.splice(5,0,ContextMenu.buildItem({
+                    id: "yabd-download-all-attachments",
+                    label: context?.message?.attachments.length == 1 ? "Download Attachment" : "Download Attachments",
+                    action: () => {
+                        for(let i = 0; i < attachments.length; i++){
+                            let attachment = attachments[i];
+                            downloadFileInClient(attachment.url, attachment.filename);
+                        }
+                    },
+                    icon: DownloadIcon
+                }))
+            }
+        }
+    }
 
     //#region Meta and Updates
     parseMeta(fileContent){
@@ -5052,6 +5050,7 @@ module.exports = class YABDP4Nitro {
         DOM.removeStyle("YABDP4NitroGeneral");
         ContextMenu.unpatch('expression-picker', this.expressionPickerFunction);
         ContextMenu.unpatch('stream-context', this.streamContextPatch);
+        ContextMenu.unpatch("message", this.messageContext);
         
         if(ffmpeg){
             ffmpeg.terminate();
